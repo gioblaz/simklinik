@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * SIMKlinik — Gudang Obat: Master Data Obat & BHP
  */
@@ -9,6 +9,7 @@ $sub_active    = 'master';
 
 require_once dirname(__DIR__, 2) . '/config.php';
 require_once dirname(__DIR__, 2) . '/includes/functions.php';
+require_module_access('gudang_obat');
 
 // ─── Tambah / Edit Obat ───────────────────────────────────────
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['simpan_obat'])) {

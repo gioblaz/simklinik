@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * SIMKlinik — Laporan & Statistik
  */
@@ -8,6 +8,7 @@ $active_module = 'laporan';
 
 require_once dirname(__DIR__, 2) . '/config.php';
 require_once dirname(__DIR__, 2) . '/includes/functions.php';
+require_module_access('laporan');
 
 // ─── Filter Periode & Paginasi ────────────────────────────────
 $tgl_mulai  = sanitize($_GET['tgl_mulai'] ?? date('Y-m-01'));

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * SIMKlinik — Daftar Permintaan & Antrean Pemeriksaan Laboratorium
  */
@@ -8,6 +8,7 @@ $active_module = 'laboratorium';
 
 require_once dirname(__DIR__, 2) . '/config.php';
 require_once dirname(__DIR__, 2) . '/includes/functions.php';
+require_module_access('laboratorium');
 
 // Filter & Parameter
 $today       = date('Y-m-d');

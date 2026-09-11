@@ -79,8 +79,8 @@ $nav_sections = [
     'items' => [
       [
         'module' => 'kepegawaian',
-        'label'  => 'Master Dokter & Jadwal',
-        'icon'   => 'fa-user-md',
+        'label'  => 'Kepegawaian & Dokter',
+        'icon'   => 'fa-id-badge',
         'color'  => '#7c3aed',
         'url'    => 'kepegawaian/index.php'
       ],
@@ -163,6 +163,13 @@ $nav_sections = [
     'title' => 'Pengaturan',
     'items' => [
       [
+        'module' => 'manajemen_user',
+        'label'  => 'Manajemen User',
+        'icon'   => 'fa-users-cog',
+        'color'  => '#dc2626',
+        'url'    => 'manajemen_user/index.php'
+      ],
+      [
         'module' => 'settings',
         'label'  => 'Pengaturan Sistem',
         'icon'   => 'fa-sliders',
@@ -198,9 +205,13 @@ $nav_sections = [
 
   <!-- Navigation Links -->
   <nav class="sidebar-nav">
-    <?php foreach ($nav_sections as $sec): ?>
+    <?php foreach ($nav_sections as $sec):
+      // Filter items: hanya tampilkan yang bisa diakses user
+      $visible_items = array_filter($sec['items'], fn($item) => can_access($item['module']));
+      if (empty($visible_items)) continue; // Skip section jika tidak ada item yang boleh diakses
+    ?>
       <div class="nav-section"><?= htmlspecialchars($sec['title']) ?></div>
-      <?php foreach ($sec['items'] as $item): ?>
+      <?php foreach ($visible_items as $item): ?>
         <?php 
           $is_active  = ($active_module === $item['module']); 
           $item_color = $item['color'] ?? '#00bfa5';
@@ -221,6 +232,7 @@ $nav_sections = [
       <?php endforeach; ?>
     <?php endforeach; ?>
   </nav>
+
 
   <!-- Sidebar Footer -->
   <div class="sidebar-footer">

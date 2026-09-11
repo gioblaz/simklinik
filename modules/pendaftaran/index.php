@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * SIMKlinik — Antrian & Pendaftaran Pasien
  * Dilengkapi Form Tambah / Edit Pendaftaran Expandable & Collapsible Real-Time
@@ -9,6 +9,7 @@ $active_module = 'pendaftaran';
 
 require_once dirname(__DIR__, 2) . '/config.php';
 require_once dirname(__DIR__, 2) . '/includes/functions.php';
+require_module_access('pendaftaran');
 
 // ─── AJAX Actions ─────────────────────────────────────────────
 if (isset($_GET['action']) || isset($_POST['action'])) {

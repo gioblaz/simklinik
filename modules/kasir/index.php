@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * SIMKlinik — Kasir & Billing (Antrian Pembayaran Pasien)
  */
@@ -8,6 +8,7 @@ $active_module = 'kasir';
 
 require_once dirname(__DIR__, 2) . '/config.php';
 require_once dirname(__DIR__, 2) . '/includes/functions.php';
+require_module_access('kasir');
 
 // ─── Filter ──────────────────────────────────────────────────
 $today  = date('Y-m-d');

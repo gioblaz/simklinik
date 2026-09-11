@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * SIMKlinik — Rekam Medis (Daftar Antrian & Pemeriksaan)
  */
@@ -8,6 +8,7 @@ $active_module = 'rekam_medis';
 
 require_once dirname(__DIR__, 2) . '/config.php';
 require_once dirname(__DIR__, 2) . '/includes/functions.php';
+require_module_access('rekam_medis');
 
 // ─── Filter ──────────────────────────────────────────────────
 $today     = date('Y-m-d');

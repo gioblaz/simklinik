@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * SIMKlinik — Integrasi Satu Sehat (Kemenkes RI) — HL7 FHIR R4 Standard
  * Fitur: Test Koneksi, Lookup NIK IHS, Preview Bundle JSON & Transmisi Bundling Kunjungan
@@ -9,6 +9,7 @@ $active_module = 'satu_sehat';
 
 require_once dirname(__DIR__, 2) . '/config.php';
 require_once dirname(__DIR__, 2) . '/includes/functions.php';
+require_module_access('satu_sehat');
 require_once dirname(__DIR__, 2) . '/includes/satusehat_service.php';
 
 $cfg = get_satusehat_config();

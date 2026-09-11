@@ -8,6 +8,7 @@ $active_module = 'tarif_ralan';
 
 require_once dirname(__DIR__, 2) . '/config.php';
 require_once dirname(__DIR__, 2) . '/includes/functions.php';
+require_module_access('tarif_ralan');
 
 // ─── Proses Simpan / Update Tindakan ──────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -230,7 +231,8 @@ include dirname(__DIR__, 2) . '/includes/header.php';
                 <td style="text-align:right;padding:7px 14px;">
                   <div style="display:inline-flex;gap:4px;">
                     <button type="button" class="btn btn-sm btn-secondary" style="padding:3px 7px;font-size:11px;color:#2563eb;" title="Edit Tindakan"
-                            onclick='openModalEdit(<?= json_encode($t) ?>)'>
+                            data-tindakan="<?= htmlspecialchars(json_encode($t), ENT_QUOTES, 'UTF-8') ?>"
+                            onclick="openModalEdit(this)">
                       <i class="fas fa-edit"></i>
                     </button>
                     <form method="POST" action="" style="display:inline;" onsubmit="return confirm('Hapus tindakan ini?')">
@@ -428,19 +430,26 @@ function openModalTambah() {
   document.getElementById('modalTindakan').style.display = 'flex';
 }
 
-function openModalEdit(t) {
+function openModalEdit(elOrData) {
+  let t = elOrData;
+  if (elOrData instanceof Element && elOrData.dataset && elOrData.dataset.tindakan) {
+    try { t = JSON.parse(elOrData.dataset.tindakan); } catch(e) { console.error(e); t = {}; }
+  } else if (typeof elOrData === 'string') {
+    try { t = JSON.parse(elOrData); } catch(e) { console.error(e); t = {}; }
+  }
+
   document.getElementById('modalTitle').innerText = 'Edit Tarif Tindakan Ralan';
   document.getElementById('modalIsEdit').value = '1';
-  document.getElementById('m_kd_jenis_prw').value = t.kd_jenis_prw;
+  document.getElementById('m_kd_jenis_prw').value = t.kd_jenis_prw || '';
   document.getElementById('m_kd_jenis_prw').readOnly = true;
-  document.getElementById('m_nm_perawatan').value = t.nm_perawatan;
+  document.getElementById('m_nm_perawatan').value = t.nm_perawatan || '';
   document.getElementById('m_tarif_tindakandr').value = t.tarif_tindakandr || 0;
   document.getElementById('m_tarif_tindakanpr').value = t.tarif_tindakanpr || 0;
   document.getElementById('m_bhp').value = t.bhp || 0;
   document.getElementById('m_material').value = t.material || 0;
   document.getElementById('m_kso').value = t.kso || 0;
   document.getElementById('m_menejemen').value = t.menejemen || 0;
-  document.getElementById('m_status').value = t.status;
+  document.getElementById('m_status').value = t.status !== undefined ? t.status : '1';
   calcTotalTarif();
 
   document.getElementById('modalTindakan').style.display = 'flex';

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * SIMKlinik — Integrasi PCare BPJS Kesehatan (Bridging Faskes Tingkat Pertama)
  * Fitur: Validasi Peserta, Bridging Kunjungan, Pembuatan Rujukan Subspesialis/Khusus, & Cetak Surat Rujukan
@@ -9,6 +9,7 @@ $active_module = 'pcare';
 
 require_once dirname(__DIR__, 2) . '/config.php';
 require_once dirname(__DIR__, 2) . '/includes/functions.php';
+require_module_access('pcare');
 
 // Load PCare Settings
 $consid   = ($conn->query("SELECT value FROM mlite_settings WHERE module='icare' AND field='consid' LIMIT 1")->fetch_assoc()['value'] ?? '');

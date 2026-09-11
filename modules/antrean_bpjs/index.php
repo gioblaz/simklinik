@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * SIMKlinik — Modul Antrean Online BPJS Kesehatan (Mobile JKN & 7 Task Pelayanan)
  * Dilengkapi:
@@ -12,6 +12,7 @@ $active_module = 'antrean_bpjs';
 
 require_once dirname(__DIR__, 2) . '/config.php';
 require_once dirname(__DIR__, 2) . '/includes/functions.php';
+require_module_access('antrean_bpjs');
 require_once dirname(__DIR__, 2) . '/includes/bpjs_antrean.php';
 
 // ─── AJAX Actions ─────────────────────────────────────────────

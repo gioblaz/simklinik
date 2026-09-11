@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * SIMKlinik — Pelayanan Farmasi & Apotek
  * Alur Kerja: 1. Validasi & Edit Resep -> 2. Telaah Resep (Skrining) -> 3. Penyerahan Obat (Dispensing)
@@ -9,6 +9,7 @@ $active_module = 'farmasi';
 
 require_once dirname(__DIR__, 2) . '/config.php';
 require_once dirname(__DIR__, 2) . '/includes/functions.php';
+require_module_access('farmasi');
 
 // Pastikan tabel telaah_resep tersedia
 $conn->query("

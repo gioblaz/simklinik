@@ -191,3 +191,6 @@ function csrf_token(): string {
 function verify_csrf(string $token): bool {
     return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
 }
+
+// ─── Auto-load Auth Functions ───────────────────────────────────────────────
+require_once dirname(__FILE__) . '/includes/auth.php';

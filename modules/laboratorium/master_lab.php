@@ -717,10 +717,10 @@ include dirname(__DIR__, 2) . '/includes/header.php';
                     <a href="?tab=template&kd_pkg=<?= urlencode($p['kd_jenis_prw']) ?>" class="btn btn-outline btn-sm" style="padding:4px 7px;font-size:11px;color:#0284c7;border-color:#bae6fd;" title="Petakan Detail Tindakan">
                       <i class="fas fa-sliders"></i>
                     </a>
-                    <button type="button" class="btn btn-outline btn-sm" onclick="openCloneModal(<?= htmlspecialchars(json_encode($p), ENT_QUOTES, 'UTF-8') ?>)" style="padding:4px 7px;font-size:11px;color:#d97706;border-color:#fde68a;" title="Duplikasi / Klon Paket">
+                    <button type="button" class="btn btn-outline btn-sm btn-clone-paket" data-paket="<?= htmlspecialchars(json_encode($p), ENT_QUOTES, 'UTF-8') ?>" onclick="openCloneModal(this)" style="padding:4px 7px;font-size:11px;color:#d97706;border-color:#fde68a;" title="Duplikasi / Klon Paket">
                       <i class="fas fa-clone"></i>
                     </button>
-                    <button type="button" class="btn btn-outline btn-sm" onclick="editPaket(<?= htmlspecialchars(json_encode($p), ENT_QUOTES, 'UTF-8') ?>)" style="padding:4px 7px;font-size:11px;color:#334155;" title="Edit Komponen Tarif">
+                    <button type="button" class="btn btn-outline btn-sm btn-edit-paket" data-paket="<?= htmlspecialchars(json_encode($p), ENT_QUOTES, 'UTF-8') ?>" onclick="editPaket(this)" style="padding:4px 7px;font-size:11px;color:#334155;" title="Edit Komponen Tarif">
                       <i class="fas fa-edit"></i>
                     </button>
                     <form method="POST" action="" onsubmit="return confirm('Hapus paket <?= htmlspecialchars($p['nm_perawatan']) ?> beserta semua detail parameternya?')" style="margin:0;">
@@ -806,7 +806,7 @@ include dirname(__DIR__, 2) . '/includes/header.php';
           <span style="font-size:11.5px;color:#64748b;">
             Tarif Paket: <strong style="color:#059669;font-size:13px;"><?= rupiah((float)$current_pkg_info['total_byr']) ?></strong>
           </span>
-          <button type="button" class="btn btn-outline btn-sm" onclick='editPaket(<?= json_encode($current_pkg_info) ?>)' style="font-size:11.5px;padding:3px 8px;">
+          <button type="button" class="btn btn-outline btn-sm" data-paket="<?= htmlspecialchars(json_encode($current_pkg_info), ENT_QUOTES, 'UTF-8') ?>" onclick="editPaket(this)" style="font-size:11.5px;padding:3px 8px;">
             <i class="fas fa-edit"></i> Edit Tarif
           </button>
         </div>
@@ -905,21 +905,21 @@ include dirname(__DIR__, 2) . '/includes/header.php';
                 </td>
                 <td style="text-align:center;">
                   <?php if (!empty($t['loinc_code'])): ?>
-                    <span class="badge" style="background:#f3e8ff;color:#6b21a8;border:1px solid #e9d5ff;font-size:10.5px;cursor:pointer;" onclick="openModalSatuSehat(<?= htmlspecialchars(json_encode($t), ENT_QUOTES, 'UTF-8') ?>)" title="<?= htmlspecialchars($t['loinc_display']) ?>">
+                    <span class="badge" style="background:#f3e8ff;color:#6b21a8;border:1px solid #e9d5ff;font-size:10.5px;cursor:pointer;" data-template="<?= htmlspecialchars(json_encode($t), ENT_QUOTES, 'UTF-8') ?>" onclick="openModalSatuSehat(this)" title="<?= htmlspecialchars($t['loinc_display']) ?>">
                       <i class="fas fa-shield-heart"></i> <?= htmlspecialchars($t['loinc_code']) ?>
                     </span>
                   <?php else: ?>
-                    <button type="button" class="btn btn-outline btn-sm" onclick="openModalSatuSehat(<?= htmlspecialchars(json_encode($t), ENT_QUOTES, 'UTF-8') ?>)" style="padding:2px 6px;font-size:10px;border-color:#e2e8f0;color:#64748b;">
+                    <button type="button" class="btn btn-outline btn-sm" data-template="<?= htmlspecialchars(json_encode($t), ENT_QUOTES, 'UTF-8') ?>" onclick="openModalSatuSehat(this)" style="padding:2px 6px;font-size:10px;border-color:#e2e8f0;color:#64748b;">
                       <i class="fas fa-link"></i> Petakan
                     </button>
                   <?php endif; ?>
                 </td>
                 <td style="text-align:center;">
                   <div style="display:flex;gap:4px;justify-content:center;">
-                    <button type="button" class="btn btn-outline btn-sm" onclick="openModalSatuSehat(<?= htmlspecialchars(json_encode($t), ENT_QUOTES, 'UTF-8') ?>)" style="padding:3px 7px;font-size:11px;color:#7c3aed;border-color:#e9d5ff;" title="Pemetaan Satu Sehat LOINC">
+                    <button type="button" class="btn btn-outline btn-sm" data-template="<?= htmlspecialchars(json_encode($t), ENT_QUOTES, 'UTF-8') ?>" onclick="openModalSatuSehat(this)" style="padding:3px 7px;font-size:11px;color:#7c3aed;border-color:#e9d5ff;" title="Pemetaan Satu Sehat LOINC">
                       <i class="fas fa-shield-heart"></i>
                     </button>
-                    <button type="button" class="btn btn-outline btn-sm" onclick="editTemplate(<?= htmlspecialchars(json_encode($t), ENT_QUOTES, 'UTF-8') ?>)" style="padding:3px 7px;font-size:11px;color:#334155;" title="Edit Parameter">
+                    <button type="button" class="btn btn-outline btn-sm" data-template="<?= htmlspecialchars(json_encode($t), ENT_QUOTES, 'UTF-8') ?>" onclick="editTemplate(this)" style="padding:3px 7px;font-size:11px;color:#334155;" title="Edit Parameter">
                       <i class="fas fa-edit"></i>
                     </button>
                     <form method="POST" action="" onsubmit="return confirm('Hapus parameter <?= htmlspecialchars($t['Pemeriksaan']) ?>?')" style="margin:0;">
@@ -1426,7 +1426,7 @@ include dirname(__DIR__, 2) . '/includes/header.php';
                 </td>
                 <td style="text-align:center;">
                   <div style="display:flex;gap:4px;justify-content:center;">
-                    <button type="button" class="btn btn-outline btn-sm" onclick="loadSsToForm(<?= htmlspecialchars(json_encode($row_ss), ENT_QUOTES, 'UTF-8') ?>)" style="padding:3px 8px;font-size:11px;color:#16a34a;border-color:#bbf7d0;" title="Pilih & Edit Pemetaan">
+                    <button type="button" class="btn btn-outline btn-sm" data-ss="<?= htmlspecialchars(json_encode($row_ss), ENT_QUOTES, 'UTF-8') ?>" onclick="loadSsToForm(this)" style="padding:3px 8px;font-size:11px;color:#16a34a;border-color:#bbf7d0;" title="Pilih & Edit Pemetaan">
                       <i class="fas fa-edit"></i> Edit
                     </button>
                     <?php if (!empty($row_ss['loinc_code'])): ?>
@@ -1753,31 +1753,31 @@ include dirname(__DIR__, 2) . '/includes/header.php';
 
     <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px;">
       <div style="background:#f3e8ff;border:1px solid #e9d5ff;padding:10px 14px;border-radius:8px;font-size:12px;">
-        <div>Parameter Lab: <strong id="ss_param_label" style="color:#6b21a8;">-</strong></div>
+        <div>Parameter Lab: <strong id="modal_ss_param_label" style="color:#6b21a8;">-</strong></div>
         <div style="color:#7e22ce;font-size:11px;margin-top:2px;">Standarisasi terminologi FHIR Observation Diagnostic Report.</div>
       </div>
 
-      <input type="hidden" id="ss_id_template" value="0">
-      <input type="hidden" id="ss_kd_pkg" value="">
+      <input type="hidden" id="modal_ss_id_template" value="0">
+      <input type="hidden" id="modal_ss_kd_pkg" value="">
 
       <div class="form-group" style="margin:0;">
         <label class="form-label" style="font-size:11.5px;font-weight:700;">Kode LOINC <span class="text-danger">*</span></label>
-        <input type="text" id="ss_code" class="form-control form-control-sm" placeholder="cth: 718-7" style="font-family:monospace;font-weight:700;">
+        <input type="text" id="modal_ss_code" class="form-control form-control-sm" placeholder="cth: 718-7" style="font-family:monospace;font-weight:700;">
       </div>
 
       <div class="form-group" style="margin:0;">
         <label class="form-label" style="font-size:11.5px;font-weight:700;">Nama Display LOINC</label>
-        <input type="text" id="ss_display" class="form-control form-control-sm" placeholder="cth: Hemoglobin [Mass/volume] in Blood">
+        <input type="text" id="modal_ss_display" class="form-control form-control-sm" placeholder="cth: Hemoglobin [Mass/volume] in Blood">
       </div>
 
       <div class="form-row col-2">
         <div class="form-group" style="margin:0;">
           <label class="form-label" style="font-size:11px;font-weight:700;">Kode Spesimen (SNOMED)</label>
-          <input type="text" id="ss_sampel_code" class="form-control form-control-sm" value="119297000" placeholder="119297000">
+          <input type="text" id="modal_ss_sampel_code" class="form-control form-control-sm" value="119297000" placeholder="119297000">
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label" style="font-size:11px;font-weight:700;">Display Spesimen</label>
-          <input type="text" id="ss_sampel_disp" class="form-control form-control-sm" value="Blood specimen" placeholder="Blood specimen / Urine specimen">
+          <input type="text" id="modal_ss_sampel_disp" class="form-control form-control-sm" value="Blood specimen" placeholder="Blood specimen / Urine specimen">
         </div>
       </div>
 
@@ -1788,7 +1788,7 @@ include dirname(__DIR__, 2) . '/includes/header.php';
 
     <div style="padding:12px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px;">
       <button type="button" class="btn btn-outline btn-sm" onclick="closeModalSatuSehat()">Batal</button>
-      <button type="submit" class="btn btn-primary btn-sm" onclick="saveSatuSehatMapping()" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);border:none;font-weight:700;">
+      <button type="button" class="btn btn-primary btn-sm" onclick="saveSatuSehatMapping()" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);border:none;font-weight:700;">
         <i class="fas fa-save"></i> Simpan Pemetaan
       </button>
     </div>
@@ -1797,9 +1797,49 @@ include dirname(__DIR__, 2) . '/includes/header.php';
 </div>
 
 <script>
+// Helper to safely extract JSON data from element, attribute, or string
+function parseElData(elOrData, key) {
+  if (!elOrData) return {};
+  if (typeof elOrData === 'string') {
+    try { return JSON.parse(elOrData); } catch(e) { console.error('String parse error:', e); return {}; }
+  }
+  if (elOrData && elOrData.dataset && elOrData.dataset[key]) {
+    try { return JSON.parse(elOrData.dataset[key]); } catch(e) { console.error('Dataset parse error:', e); }
+  }
+  if (elOrData && elOrData.getAttribute) {
+    const attr = elOrData.getAttribute('data-' + key);
+    if (attr) {
+      try { return JSON.parse(attr); } catch(e) { console.error('Attr parse error:', e); }
+    }
+  }
+  if (elOrData && elOrData.closest) {
+    const parent = elOrData.closest('[data-' + key + ']');
+    if (parent) {
+      const attr = parent.getAttribute('data-' + key);
+      if (attr) {
+        try { return JSON.parse(attr); } catch(e) { console.error('Closest parse error:', e); }
+      }
+    }
+  }
+  if (typeof elOrData === 'object' && !elOrData.nodeType && !elOrData.tagName) {
+    return elOrData;
+  }
+  return {};
+}
+
 // ─── Modal Paket Handler ──────────────────────────────────────
 function openModalPaket(mode) {
-  document.getElementById('modalPaket').style.display = 'flex';
+  const m = document.getElementById('modalPaket');
+  if (m) {
+    m.style.setProperty('display', 'flex', 'important');
+    m.style.opacity = '1';
+    m.style.visibility = 'visible';
+    m.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+  if (typeof openModal === 'function') {
+    try { openModal('modalPaket'); } catch(e) {}
+  }
   if (mode === 'add') {
     document.getElementById('modalPaketTitle').innerText = 'Tambah Paket Pemeriksaan Lab';
     document.getElementById('pkg_is_edit').value = '0';
@@ -1820,10 +1860,8 @@ function openModalPaket(mode) {
   }
 }
 
-function editPaket(p) {
-  if (typeof p === 'string') {
-    try { p = JSON.parse(p); } catch(e) { console.error('Parse error:', e); }
-  }
+function editPaket(elOrData) {
+  const p = parseElData(elOrData, 'paket');
   openModalPaket('edit');
   document.getElementById('modalPaketTitle').innerText = 'Edit Paket Pemeriksaan Lab';
   document.getElementById('pkg_is_edit').value = '1';
@@ -1844,7 +1882,15 @@ function editPaket(p) {
 }
 
 function closeModalPaket() {
-  document.getElementById('modalPaket').style.display = 'none';
+  const m = document.getElementById('modalPaket');
+  if (m) {
+    m.style.display = 'none';
+    m.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+  if (typeof closeModal === 'function') {
+    try { closeModal('modalPaket'); } catch(e) {}
+  }
 }
 
 function calcPkgTotal() {
@@ -1860,11 +1906,16 @@ function calcPkgTotal() {
 }
 
 // ─── Modal Clone Handler ──────────────────────────────────────
-function openCloneModal(p) {
-  if (typeof p === 'string') {
-    try { p = JSON.parse(p); } catch(e) { console.error('Parse error:', e); }
+function openCloneModal(elOrData) {
+  const p = parseElData(elOrData, 'paket');
+  const m = document.getElementById('modalClone');
+  if (m) {
+    m.style.setProperty('display', 'flex', 'important');
+    m.style.opacity = '1';
+    m.style.visibility = 'visible';
+    m.classList.add('active');
+    document.body.style.overflow = 'hidden';
   }
-  document.getElementById('modalClone').style.display = 'flex';
   document.getElementById('clone_src_kd').value = p.kd_jenis_prw || '';
   document.getElementById('clone_src_label').innerText = (p.kd_jenis_prw || '') + ' - ' + (p.nm_perawatan || '');
   document.getElementById('clone_new_kd').value = (p.kd_jenis_prw || '') + '_COPY';
@@ -1872,12 +1923,24 @@ function openCloneModal(p) {
 }
 
 function closeModalClone() {
-  document.getElementById('modalClone').style.display = 'none';
+  const m = document.getElementById('modalClone');
+  if (m) {
+    m.style.display = 'none';
+    m.classList.remove('active');
+    document.body.style.overflow = '';
+  }
 }
 
 // ─── Modal Template Parameter Handler ─────────────────────────
 function openModalTemplate(mode) {
-  document.getElementById('modalTemplate').style.display = 'flex';
+  const m = document.getElementById('modalTemplate');
+  if (m) {
+    m.style.setProperty('display', 'flex', 'important');
+    m.style.opacity = '1';
+    m.style.visibility = 'visible';
+    m.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
   if (mode === 'add') {
     document.getElementById('modalTemplateTitle').innerText = 'Tambah Parameter Item Lab';
     document.getElementById('tpl_is_edit').value = '0';
@@ -1894,10 +1957,8 @@ function openModalTemplate(mode) {
   }
 }
 
-function editTemplate(t) {
-  if (typeof t === 'string') {
-    try { t = JSON.parse(t); } catch(e) { console.error('Parse error:', e); }
-  }
+function editTemplate(elOrData) {
+  const t = parseElData(elOrData, 'template');
   openModalTemplate('edit');
   document.getElementById('modalTemplateTitle').innerText = 'Edit Parameter Item Lab';
   document.getElementById('tpl_is_edit').value = '1';
@@ -1914,8 +1975,102 @@ function editTemplate(t) {
 }
 
 function closeModalTemplate() {
-  document.getElementById('modalTemplate').style.display = 'none';
+  const m = document.getElementById('modalTemplate');
+  if (m) {
+    m.style.display = 'none';
+    m.classList.remove('active');
+    document.body.style.overflow = '';
+  }
 }
+
+// ─── Modal Satu Sehat (LOINC) ─────────────────────────────────
+function openModalSatuSehat(elOrData) {
+  const t = parseElData(elOrData, 'template');
+  const m = document.getElementById('modalSatuSehat');
+  if (m) {
+    m.style.setProperty('display', 'flex', 'important');
+    m.style.opacity = '1';
+    m.style.visibility = 'visible';
+    m.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+  document.getElementById('modal_ss_param_label').innerText = (t.Pemeriksaan || '-') + ' (' + (t.kd_jenis_prw || '') + ')';
+  document.getElementById('modal_ss_id_template').value = t.id_template || '0';
+  document.getElementById('modal_ss_kd_pkg').value = t.kd_jenis_prw || '<?= $selected_pkg ?>';
+  document.getElementById('modal_ss_code').value = t.loinc_code || '';
+  document.getElementById('modal_ss_display').value = t.loinc_display || t.Pemeriksaan || '';
+  document.getElementById('modal_ss_sampel_code').value = t.sampel_code || '119297000';
+  document.getElementById('modal_ss_sampel_disp').value = t.sampel_display || 'Blood specimen';
+}
+
+function closeModalSatuSehat() {
+  const m = document.getElementById('modalSatuSehat');
+  if (m) {
+    m.style.display = 'none';
+    m.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+}
+
+function saveSatuSehatMapping() {
+  const idTpl = document.getElementById('modal_ss_id_template').value;
+  const kdPkg = document.getElementById('modal_ss_kd_pkg').value;
+  const code = document.getElementById('modal_ss_code').value.trim();
+  const display = document.getElementById('modal_ss_display').value.trim();
+  const sampleCode = document.getElementById('modal_ss_sampel_code').value.trim();
+  const sampleDisp = document.getElementById('modal_ss_sampel_disp').value.trim();
+
+  const formData = new FormData();
+  formData.append('action', 'save_satusehat_mapping');
+  formData.append('id_template', idTpl);
+  formData.append('kd_jenis_prw', kdPkg);
+  formData.append('code', code);
+  formData.append('display', display);
+  formData.append('system', 'http://loinc.org');
+  formData.append('sampel_code', sampleCode || '119297000');
+  formData.append('sampel_system', 'http://snomed.info/sct');
+  formData.append('sampel_display', sampleDisp || 'Blood specimen');
+
+  fetch('<?= BASE_URL ?>modules/laboratorium/ajax.php', {
+    method: 'POST',
+    body: formData
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.status === 'success') {
+      alert(data.message);
+      window.location.reload();
+    } else {
+      alert(data.message || 'Gagal menyimpan pemetaan Satu Sehat');
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    alert('Terjadi kesalahan koneksi');
+  });
+}
+
+// ─── Global Event Delegation for Edit Buttons ─────────────────
+document.addEventListener('click', function(e) {
+  const editPkgBtn = e.target.closest('.btn-edit-paket');
+  if (editPkgBtn) {
+    e.preventDefault();
+    editPaket(editPkgBtn);
+    return;
+  }
+  const clonePkgBtn = e.target.closest('.btn-clone-paket');
+  if (clonePkgBtn) {
+    e.preventDefault();
+    openCloneModal(clonePkgBtn);
+    return;
+  }
+  const editTplBtn = e.target.closest('.btn-edit-template');
+  if (editTplBtn) {
+    e.preventDefault();
+    editTemplate(editTplBtn);
+    return;
+  }
+});
 
 // ─── Modal Preset Handler ─────────────────────────────────────
 function openModalPreset() {
@@ -2114,10 +2269,11 @@ function generateAiSample() {
   document.getElementById('ss_sampel_system').value = 'http://snomed.info/sct';
 }
 
-function loadSsToForm(row) {
+function loadSsToForm(elOrData) {
+  const row = parseElData(elOrData, 'ss');
   const sel = document.getElementById('ss_kd_jenis_prw');
   if (sel) {
-    sel.value = row.kd_jenis_prw;
+    sel.value = row.kd_jenis_prw || '';
   }
   document.getElementById('ss_code').value = row.loinc_code || '';
   document.getElementById('ss_display').value = row.loinc_display || row.nm_perawatan || '';

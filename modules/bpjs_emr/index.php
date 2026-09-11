@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * SIMKlinik — Integrasi E-RM BPJS Kesehatan (e-Rekam Medis Elektronik)
  */
@@ -8,6 +8,7 @@ $active_module = 'bpjs_emr';
 
 require_once dirname(__DIR__, 2) . '/config.php';
 require_once dirname(__DIR__, 2) . '/includes/functions.php';
+require_module_access('bpjs_emr');
 
 // Load BPJS EMR Settings
 $consid   = ($conn->query("SELECT value FROM mlite_settings WHERE module='bpjs_emr' AND field='consid' LIMIT 1")->fetch_assoc()['value'] ?? '');

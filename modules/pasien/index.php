@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * SIMKlinik — Daftar Pasien
  */
@@ -8,6 +8,7 @@ $active_module = 'pasien';
 
 require_once dirname(__DIR__, 2) . '/config.php';
 require_once dirname(__DIR__, 2) . '/includes/functions.php';
+require_module_access('pasien');
 
 // ─── Filter & Pencarian ──────────────────────────────────────
 $search  = sanitize($_GET['q'] ?? '');
