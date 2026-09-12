@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * SIMKlinik — Antrian & Pendaftaran Pasien
  * Dilengkapi Form Tambah / Edit Pendaftaran Expandable & Collapsible Real-Time
@@ -275,6 +275,7 @@ $result = $conn->query("
            pr.suhu_tubuh, pr.tensi, pr.nadi, pr.respirasi, pr.tinggi, pr.berat, pr.spo2, pr.gcs, pr.keluhan,
            (SELECT dp.kd_penyakit FROM diagnosa_pasien dp WHERE dp.no_rawat = r.no_rawat ORDER BY dp.prioritas ASC LIMIT 1) as kd_diag_utama,
            (SELECT pen.nm_penyakit FROM diagnosa_pasien dp LEFT JOIN penyakit pen ON dp.kd_penyakit = pen.kd_penyakit WHERE dp.no_rawat = r.no_rawat ORDER BY dp.prioritas ASC LIMIT 1) as nm_diag_utama,
+           (SELECT pd.noUrut FROM pcare_pendaftaran pd WHERE pd.no_rawat = r.no_rawat LIMIT 1) as no_urut_pcare,
            (SELECT rj.noKunjungan FROM pcare_rujuk_subspesialis rj WHERE rj.no_rawat = r.no_rawat LIMIT 1) as no_rujukan_sub,
            (SELECT rk.noKunjungan FROM pcare_rujuk_khusus rk WHERE rk.no_rawat = r.no_rawat LIMIT 1) as no_rujukan_khusus,
            (SELECT ku.noKunjungan FROM pcare_kunjungan_umum ku WHERE ku.no_rawat = r.no_rawat LIMIT 1) as no_kunjungan_pcare
@@ -311,6 +312,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_live_pendaftaran') {
     <?php else: ?>
       <?php foreach ($list as $i => $k): 
         $is_bpjs = ($k['kd_pj'] === 'BPJ' || str_contains(strtolower($k['nm_penjab'] ?? ''), 'bpjs'));
+        $has_daftar_pcare = !empty($k['no_urut_pcare']);
         $has_rujukan = !empty($k['no_rujukan_sub']) || !empty($k['no_rujukan_khusus']);
         $has_kunj_pcare = !empty($k['no_kunjungan_pcare']) || $has_rujukan;
         $no_rujukan = $k['no_rujukan_sub'] ?: ($k['no_rujukan_khusus'] ?: '');
@@ -344,26 +346,42 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_live_pendaftaran') {
           <td style="padding:9px 10px;"><?= badge_status($k['stts']) ?></td>
           <td style="padding:9px 10px;">
             <?php if ($is_bpjs): ?>
-              <div style="display:flex;flex-direction:column;gap:4px;">
+              <div style="display:flex;flex-direction:column;gap:3px;">
+                <!-- Step 1: Pendaftaran PCare -->
                 <div style="display:flex;align-items:center;gap:4px;">
-                  <?php if ($has_kunj_pcare): ?>
-                    <span style="font-size:10.5px;font-weight:700;color:#047857;background:#d1fae5;padding:2px 6px;border-radius:4px;display:inline-flex;align-items:center;gap:3px;">
-                      <i class="fas fa-check-circle"></i> Terkirim
+                  <?php if ($has_daftar_pcare): ?>
+                    <span style="font-size:10px;font-weight:700;color:#0369a1;background:#e0f2fe;padding:2px 6px;border-radius:4px;display:inline-flex;align-items:center;gap:3px;" title="Terdaftar di PCare BPJS">
+                      <i class="fas fa-id-badge"></i> Urut #<?= htmlspecialchars($k['no_urut_pcare']) ?>
                     </span>
                   <?php else: ?>
-                    <button type="button" class="btn btn-sm btn-outline-primary" style="padding:2px 6px;font-size:11px;" title="Kirim Kunjungan ke PCare BPJS" onclick="kirimKunjunganPcareRow('<?= htmlspecialchars($k['no_rawat']) ?>')">
-                      <i class="fas fa-cloud-arrow-up"></i> Kirim PCare
+                    <button type="button" class="btn btn-sm btn-outline-info" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;" title="Step 1: Kirim Pendaftaran Pasien ke PCare BPJS" onclick="kirimPendaftaranPcareRow('<?= htmlspecialchars($k['no_rawat']) ?>')">
+                      <i class="fas fa-user-plus"></i> 1. Daftar PCare
                     </button>
                   <?php endif; ?>
                 </div>
+
+                <!-- Step 2: Kunjungan PCare -->
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <?php if ($has_kunj_pcare): ?>
+                    <span style="font-size:10px;font-weight:700;color:#047857;background:#d1fae5;padding:2px 6px;border-radius:4px;display:inline-flex;align-items:center;gap:3px;" title="Kunjungan PCare Terkirim">
+                      <i class="fas fa-check-circle"></i> Kunjungan OK
+                    </span>
+                  <?php else: ?>
+                    <button type="button" class="btn btn-sm btn-outline-primary" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;" title="Step 2: Kirim Kunjungan / SOAP ke PCare BPJS" onclick="kirimKunjunganPcareRow('<?= htmlspecialchars($k['no_rawat']) ?>')">
+                      <i class="fas fa-cloud-arrow-up"></i> 2. Kirim PCare
+                    </button>
+                  <?php endif; ?>
+                </div>
+
+                <!-- Rujukan RS (Opsional) -->
                 <div style="display:flex;align-items:center;gap:4px;">
                   <?php if ($has_rujukan): ?>
-                    <a href="<?= BASE_URL ?>modules/pcare/cetak_rujukan.php?no_rawat=<?= urlencode($k['no_rawat']) ?>" target="_blank" class="btn btn-sm btn-outline-success" style="padding:2px 6px;font-size:11px;" title="Cetak Surat Rujukan BPJS">
+                    <a href="<?= BASE_URL ?>modules/pcare/cetak_rujukan.php?no_rawat=<?= urlencode($k['no_rawat']) ?>" target="_blank" class="btn btn-sm btn-outline-success" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;" title="Cetak Surat Rujukan BPJS">
                       <i class="fas fa-print"></i> Cetak Rujuk
                     </a>
                   <?php else: ?>
-                    <button type="button" class="btn btn-sm btn-outline-info" style="padding:2px 6px;font-size:11px;" title="Buat & Kirim Surat Rujukan BPJS" onclick='bukaModalRujukan(<?= $data_json ?>)'>
-                      <i class="fas fa-share-nodes"></i> Buat Rujukan
+                    <button type="button" class="btn btn-sm btn-outline-secondary" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;" title="Buat & Kirim Surat Rujukan BPJS" onclick='bukaModalRujukan(<?= $data_json ?>)'>
+                      <i class="fas fa-share-nodes"></i> Rujuk RS
                     </button>
                   <?php endif; ?>
                 </div>
@@ -430,6 +448,9 @@ include dirname(__DIR__, 2) . '/includes/header.php';
     <p class="page-subtitle" style="font-size:12px;margin:0;color:#64748b;">Kelola pendaftaran kunjungan harian pasien &mdash; <?= tgl_indo($tgl, true) ?></p>
   </div>
   <div class="page-actions" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <button type="button" class="btn btn-outline-pill" style="border-color:#0284c7;color:#0369a1;background:#f0f9ff;" onclick="sinkronSemuaPcare()" title="Tarik & Sinkronkan Nomor Urut Antrean dari PCare BPJS">
+      <i class="fas fa-rotate" id="iconSyncPcare"></i> TARIK ANTREAN PCARE
+    </button>
     <a href="<?= BASE_URL ?>modules/tarif_ralan/index.php" class="btn btn-outline-pill">
       <i class="fas fa-info-circle"></i> HARGA & TARIF
     </a>
@@ -670,7 +691,7 @@ include dirname(__DIR__, 2) . '/includes/header.php';
             <th>Penjamin</th>
             <th style="width:90px;">Jam</th>
             <th style="width:95px;">Status</th>
-            <th style="width:130px;">Bridging PCare</th>
+            <th style="width:145px;">Bridging PCare</th>
             <th style="width:140px;text-align:right;">Aksi</th>
           </tr>
         </thead>
@@ -685,6 +706,7 @@ include dirname(__DIR__, 2) . '/includes/header.php';
           <?php else: ?>
             <?php foreach ($list as $i => $k): 
               $is_bpjs = ($k['kd_pj'] === 'BPJ' || str_contains(strtolower($k['nm_penjab'] ?? ''), 'bpjs'));
+              $has_daftar_pcare = !empty($k['no_urut_pcare']);
               $has_rujukan = !empty($k['no_rujukan_sub']) || !empty($k['no_rujukan_khusus']);
               $has_kunj_pcare = !empty($k['no_kunjungan_pcare']) || $has_rujukan;
               $no_rujukan = $k['no_rujukan_sub'] ?: ($k['no_rujukan_khusus'] ?: '');
@@ -718,26 +740,42 @@ include dirname(__DIR__, 2) . '/includes/header.php';
                 <td style="padding:9px 10px;"><?= badge_status($k['stts']) ?></td>
                 <td style="padding:9px 10px;">
                   <?php if ($is_bpjs): ?>
-                    <div style="display:flex;flex-direction:column;gap:4px;">
+                    <div style="display:flex;flex-direction:column;gap:3px;">
+                      <!-- Step 1: Pendaftaran PCare -->
                       <div style="display:flex;align-items:center;gap:4px;">
-                        <?php if ($has_kunj_pcare): ?>
-                          <span style="font-size:10.5px;font-weight:700;color:#047857;background:#d1fae5;padding:2px 6px;border-radius:4px;display:inline-flex;align-items:center;gap:3px;">
-                            <i class="fas fa-check-circle"></i> Terkirim
+                        <?php if ($has_daftar_pcare): ?>
+                          <span style="font-size:10px;font-weight:700;color:#0369a1;background:#e0f2fe;padding:2px 6px;border-radius:4px;display:inline-flex;align-items:center;gap:3px;" title="Terdaftar di PCare BPJS">
+                            <i class="fas fa-id-badge"></i> Urut #<?= htmlspecialchars($k['no_urut_pcare']) ?>
                           </span>
                         <?php else: ?>
-                          <button type="button" class="btn btn-sm btn-outline-primary" style="padding:2px 6px;font-size:11px;" title="Kirim Kunjungan ke PCare BPJS" onclick="kirimKunjunganPcareRow('<?= htmlspecialchars($k['no_rawat']) ?>')">
-                            <i class="fas fa-cloud-arrow-up"></i> Kirim PCare
+                          <button type="button" class="btn btn-sm btn-outline-info" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;" title="Step 1: Kirim Pendaftaran Pasien ke PCare BPJS" onclick="kirimPendaftaranPcareRow('<?= htmlspecialchars($k['no_rawat']) ?>')">
+                            <i class="fas fa-user-plus"></i> 1. Daftar PCare
                           </button>
                         <?php endif; ?>
                       </div>
+
+                      <!-- Step 2: Kunjungan PCare -->
+                      <div style="display:flex;align-items:center;gap:4px;">
+                        <?php if ($has_kunj_pcare): ?>
+                          <span style="font-size:10px;font-weight:700;color:#047857;background:#d1fae5;padding:2px 6px;border-radius:4px;display:inline-flex;align-items:center;gap:3px;" title="Kunjungan PCare Terkirim">
+                            <i class="fas fa-check-circle"></i> Kunjungan OK
+                          </span>
+                        <?php else: ?>
+                          <button type="button" class="btn btn-sm btn-outline-primary" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;" title="Step 2: Kirim Kunjungan / SOAP ke PCare BPJS" onclick="kirimKunjunganPcareRow('<?= htmlspecialchars($k['no_rawat']) ?>')">
+                            <i class="fas fa-cloud-arrow-up"></i> 2. Kirim PCare
+                          </button>
+                        <?php endif; ?>
+                      </div>
+
+                      <!-- Rujukan RS (Opsional) -->
                       <div style="display:flex;align-items:center;gap:4px;">
                         <?php if ($has_rujukan): ?>
-                          <a href="<?= BASE_URL ?>modules/pcare/cetak_rujukan.php?no_rawat=<?= urlencode($k['no_rawat']) ?>" target="_blank" class="btn btn-sm btn-outline-success" style="padding:2px 6px;font-size:11px;" title="Cetak Surat Rujukan BPJS">
+                          <a href="<?= BASE_URL ?>modules/pcare/cetak_rujukan.php?no_rawat=<?= urlencode($k['no_rawat']) ?>" target="_blank" class="btn btn-sm btn-outline-success" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;" title="Cetak Surat Rujukan BPJS">
                             <i class="fas fa-print"></i> Cetak Rujuk
                           </a>
                         <?php else: ?>
-                          <button type="button" class="btn btn-sm btn-outline-info" style="padding:2px 6px;font-size:11px;" title="Buat & Kirim Surat Rujukan BPJS" onclick='bukaModalRujukan(<?= $data_json ?>)'>
-                            <i class="fas fa-share-nodes"></i> Buat Rujukan
+                          <button type="button" class="btn btn-sm btn-outline-secondary" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;" title="Buat & Kirim Surat Rujukan BPJS" onclick='bukaModalRujukan(<?= $data_json ?>)'>
+                            <i class="fas fa-share-nodes"></i> Rujuk RS
                           </button>
                         <?php endif; ?>
                       </div>
@@ -1048,11 +1086,62 @@ function pollLivePendaftaran() {
   .catch(err => console.debug('Live sync pendaftaran:', err));
 }
 
-setInterval(pollLivePendaftaran, 8000);
+// ─── Bridging PCare: Tarik & Sinkronkan Semua Antrean Hari Ini ───
+function sinkronSemuaPcare() {
+  const icon = document.getElementById('iconSyncPcare');
+  if (icon) icon.classList.add('fa-spin');
+  showToast('Menghubungi PCare BPJS untuk menarik data antrean hari ini...', 'info');
 
-// ─── Bridging PCare: Kirim Kunjungan Cepat ───────────────────
+  fetch('<?= BASE_URL ?>modules/pcare/ajax.php?action=sinkron_semua_pcare&tgl=<?= urlencode($tgl) ?>', {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (icon) icon.classList.remove('fa-spin');
+    if (res.success) {
+      showToast(res.message, 'success');
+      pollLivePendaftaran();
+    } else {
+      showToast(res.message || 'Gagal sinkron antrean PCare', 'danger');
+    }
+  })
+  .catch(err => {
+    if (icon) icon.classList.remove('fa-spin');
+    showToast('Terjadi kesalahan saat sinkronisasi PCare: ' + err, 'danger');
+  });
+}
+
+// ─── Bridging PCare: Kirim Pendaftaran Pasien (Step 1) ─────
+function kirimPendaftaranPcareRow(no_rawat) {
+  if (!confirm(`Kirim pendaftaran pasien No. Rawat ${no_rawat} ke PCare BPJS (Step 1)?`)) return;
+  showToast('Mendaftarkan pasien ke PCare BPJS...', 'info');
+
+  const fd = new FormData();
+  fd.append('action', 'kirim_pendaftaran');
+  fd.append('no_rawat', no_rawat);
+
+  fetch('<?= BASE_URL ?>modules/pcare/ajax.php', {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: fd
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.success) {
+      showToast(res.message || 'Pendaftaran berhasil dikirim ke PCare BPJS', 'success');
+      pollLivePendaftaran();
+    } else {
+      showToast(res.message || 'Gagal mendaftarkan pasien ke PCare BPJS', 'danger');
+    }
+  })
+  .catch(err => {
+    showToast('Terjadi kesalahan jaringan saat mendaftar PCare: ' + err, 'danger');
+  });
+}
+
+// ─── Bridging PCare: Kirim Kunjungan Cepat (Step 2) ─────────
 function kirimKunjunganPcareRow(no_rawat) {
-  if (!confirm(`Kirim data kunjungan pasien No. Rawat ${no_rawat} ke PCare BPJS?`)) return;
+  if (!confirm(`Kirim data kunjungan / SOAP pasien No. Rawat ${no_rawat} ke PCare BPJS (Step 2)?`)) return;
   showToast('Mengirim kunjungan ke PCare BPJS...', 'info');
 
   const fd = new FormData();
@@ -1265,11 +1354,14 @@ function lakukanPencarianDiagnosaModal(q) {
       row.onmouseleave = () => { row.style.background = 'transparent'; };
       
       const badgeSource = item.source === 'pcare' ? '<span style="font-size:9px;background:#d1fae5;color:#065f46;padding:1px 5px;border-radius:3px;font-weight:700;">BPJS</span>' : '<span style="font-size:9px;background:#e0f2fe;color:#0369a1;padding:1px 5px;border-radius:3px;font-weight:700;">LOKAL</span>';
+      const isTacc = typeof isDiagnosaTACC === 'function' ? isDiagnosaTACC(item.kdDiag) : false;
+      const badgeTacc = isTacc ? '<span style="font-size:9.5px;background:#fef3c7;color:#b45309;border:1px solid #fde68a;padding:1px 6px;border-radius:3px;font-weight:800;margin-left:4px;"><i class="fas fa-exclamation-triangle"></i> TACC</span>' : '';
 
       row.innerHTML = `
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-family:monospace;font-weight:800;color:#0284c7;background:#e0f2fe;padding:2px 6px;border-radius:4px;font-size:12px;">${item.kdDiag}</span>
           <span style="font-size:12.5px;font-weight:600;color:#1e293b;">${item.nmDiag}</span>
+          ${badgeTacc}
         </div>
         <div>${badgeSource}</div>
       `;
@@ -1287,7 +1379,17 @@ function pilihDiag(kd, nm) {
   document.getElementById('rujukKdDiag1').value = kd;
   document.getElementById('rujukNmDiag1').value = nm;
   document.getElementById('modalDiagDropdown').style.display = 'none';
-  showToast(`Diagnosa dipilih: [${kd}] ${nm}`, 'info');
+
+  if (typeof isDiagnosaTACC === 'function' && isDiagnosaTACC(kd)) {
+    showTaccWarningModal({
+      kdDiag: kd,
+      nmDiag: nm,
+      targetTaccSelectId: 'rujukTacc',
+      targetAlasanInputId: 'rujukAlasanTacc'
+    });
+  } else {
+    showToast(`Diagnosa dipilih: [${kd}] ${nm}`, 'info');
+  }
 }
 
 function cariFaskesRujukan(btn) {

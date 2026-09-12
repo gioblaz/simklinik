@@ -23,14 +23,14 @@ class PCareService {
             }
         }
 
-        $cons_id     = $cfg['pcare']['consid'] ?? ($cfg['icare']['consid'] ?? '');
-        $secret_key  = $cfg['pcare']['secretkey'] ?? ($cfg['icare']['secretkey'] ?? '');
-        $user_key    = $cfg['pcare']['userkey'] ?? ($cfg['icare']['userkey'] ?? '');
-        $username    = $cfg['pcare']['username'] ?? ($cfg['icare']['usernameICare'] ?? '');
-        $password    = $cfg['pcare']['password'] ?? ($cfg['icare']['passwordICare'] ?? '');
+        $cons_id     = $cfg['pcare']['consumerID'] ?? ($cfg['pcare']['consid'] ?? ($cfg['icare']['consid'] ?? ''));
+        $secret_key  = $cfg['pcare']['consumerSecret'] ?? ($cfg['pcare']['secretkey'] ?? ($cfg['icare']['secretkey'] ?? ''));
+        $user_key    = $cfg['pcare']['consumerUserKey'] ?? ($cfg['pcare']['userkey'] ?? ($cfg['icare']['userkey'] ?? ''));
+        $username    = $cfg['pcare']['usernamePcare'] ?? ($cfg['pcare']['username'] ?? ($cfg['icare']['usernameICare'] ?? ''));
+        $password    = $cfg['pcare']['passwordPcare'] ?? ($cfg['pcare']['password'] ?? ($cfg['icare']['passwordICare'] ?? ''));
         $kd_aplikasi = $cfg['pcare']['kd_aplikasi'] ?? ($cfg['icare']['kd_aplikasi'] ?? '095');
-        $kode_ppk    = $cfg['pcare']['kode_faskes'] ?? ($cfg['icare']['kode_faskes'] ?? '0115B001');
-        $base_url    = $cfg['pcare']['urlPCare'] ?? ($cfg['icare']['urlPCare'] ?? 'https://apijkn.bpjs-kesehatan.go.id/pcare-rest');
+        $kode_ppk    = $cfg['pcare']['kode_fktp'] ?? ($cfg['pcare']['kode_faskes'] ?? ($cfg['icare']['kode_faskes'] ?? '0169B012'));
+        $base_url    = $cfg['pcare']['PCareApiUrl'] ?? ($cfg['pcare']['urlPCare'] ?? ($cfg['icare']['urlPCare'] ?? 'https://apijkn.bpjs-kesehatan.go.id/pcare-rest'));
 
         return [
             'cons_id'     => $cons_id,
@@ -48,7 +48,7 @@ class PCareService {
     /**
      * Generate Header Autentikasi Standar BPJS (HMAC-SHA256 & Basic Auth)
      */
-    public static function generateHeaders(): array {
+    public static function generateHeaders(string $method = 'GET'): array {
         $cfg = self::getConfig();
         $cons_id     = $cfg['cons_id'];
         $secret_key  = $cfg['secret_key'];
@@ -64,6 +64,9 @@ class PCareService {
         $signature = base64_encode(hash_hmac('sha256', $cons_id . '&' . $timestamp, $secret_key, true));
         $auth_hash = base64_encode("{$username}:{$password}:{$kd_aplikasi}");
 
+        // BPJS PCare REST API TrustMark standard: POST/PUT menggunakan Content-Type: text/plain
+        $contentType = in_array(strtoupper($method), ['POST', 'PUT']) ? 'text/plain' : 'application/json; charset=utf-8';
+
         return [
             'headers' => [
                 "X-cons-id: {$cons_id}",
@@ -71,7 +74,8 @@ class PCareService {
                 "X-signature: {$signature}",
                 "X-authorization: Basic {$auth_hash}",
                 "user_key: {$user_key}",
-                "Content-Type: application/json; charset=utf-8"
+                "Content-Type: {$contentType}",
+                "Accept: application/json"
             ],
             'timestamp' => $timestamp,
             'key'       => $cons_id . $secret_key . $timestamp
@@ -90,7 +94,7 @@ class PCareService {
             ];
         }
 
-        $auth = self::generateHeaders();
+        $auth = self::generateHeaders($method);
         $url  = $cfg['base_url'] . '/' . ltrim($endpoint, '/');
 
         $start_time = microtime(true);
@@ -98,8 +102,8 @@ class PCareService {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 3);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 6);
         curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
         curl_setopt($ch, CURLOPT_NOSIGNAL, 1);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $auth['headers']);
@@ -140,8 +144,10 @@ class PCareService {
 
         $json = json_decode($raw, true);
         if (!$json) {
+            $clean_msg = strip_tags($raw);
+            $clean_msg = preg_replace('/\s+/', ' ', trim($clean_msg));
             return [
-                'metadata' => ['code' => $http_code ?: 500, 'message' => 'Respon dari BPJS bukan JSON valid: ' . substr($raw, 0, 200)],
+                'metadata' => ['code' => $http_code ?: 500, 'message' => 'Respon BPJS [Code ' . $http_code . ']: ' . (substr($clean_msg, 0, 150) ?: 'Format respon tidak valid')],
                 'response' => null,
                 'debug'    => [
                     'url'          => $url,
@@ -405,7 +411,7 @@ class PCareService {
     /**
      * 6. Ambil Data Pendaftaran Pasien per Tanggal
      */
-    public static function getPendaftaran(string $tglDaftar, int $start = 0, int $limit = 100): array {
+    public static function getPendaftaran(string $tglDaftar, int $start = 0, int $limit = 15): array {
         $tgl_formatted = date('d-m-Y', strtotime($tglDaftar));
         return self::request("pendaftaran/tglDaftar/{$tgl_formatted}/{$start}/{$limit}", 'GET');
     }

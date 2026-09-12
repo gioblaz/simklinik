@@ -140,7 +140,256 @@ switch ($action) {
         }
         break;
 
-    // ─── 3. Sync Kunjungan ke PCare BPJS ───────────────────────
+    // ─── 2.5 Kirim Pendaftaran Pasien ke PCare BPJS (POST /pendaftaran) ─
+    case 'kirim_pendaftaran':
+        $no_rawat = $conn->real_escape_string(sanitize($_POST['no_rawat'] ?? ''));
+        if (empty($no_rawat)) {
+            echo json_encode(['success' => false, 'message' => 'No. Rawat tidak valid.']);
+            exit;
+        }
+
+        $k_res = $conn->query("
+            SELECT r.*, p.nm_pasien, p.no_peserta, p.no_ktp, p.no_rkm_medis,
+                   d.nm_dokter, pol.nm_poli,
+                   pr.suhu_tubuh, pr.tensi, pr.nadi, pr.respirasi, pr.tinggi, pr.berat, pr.lingkar_perut, pr.keluhan
+            FROM reg_periksa r
+            JOIN pasien p ON r.no_rkm_medis = p.no_rkm_medis
+            LEFT JOIN dokter d ON r.kd_dokter = d.kd_dokter
+            LEFT JOIN poliklinik pol ON r.kd_poli = pol.kd_poli
+            LEFT JOIN pemeriksaan_ralan pr ON r.no_rawat = pr.no_rawat
+            WHERE r.no_rawat = '$no_rawat'
+            LIMIT 1
+        ");
+
+        if (!$k_res || $k_res->num_rows === 0) {
+            echo json_encode(['success' => false, 'message' => 'Data pasien kunjungan tidak ditemukan.']);
+            exit;
+        }
+
+        $data = $k_res->fetch_assoc();
+        $no_kartu = trim($data['no_peserta'] ?: $data['no_ktp']);
+
+        if (empty($no_kartu)) {
+            echo json_encode(['success' => false, 'message' => 'Nomor Kartu BPJS / NIK pasien masih kosong.']);
+            exit;
+        }
+
+        // Ambil mapping poli PCare (contoh: UMU -> 001)
+        $kd_poli_lokal = $conn->real_escape_string($data['kd_poli']);
+        $map_poli = $conn->query("SELECT kd_poli_pcare, nm_poli_pcare FROM maping_poliklinik_pcare WHERE kd_poli_rs = '$kd_poli_lokal' LIMIT 1")->fetch_assoc();
+        $kd_poli_pcare = $map_poli['kd_poli_pcare'] ?? '001';
+        $nm_poli_pcare = $map_poli['nm_poli_pcare'] ?? ($data['nm_poli'] ?: 'Poli Umum');
+
+        // Tensi
+        $tensi_parts = explode('/', str_replace(' ', '', $data['tensi'] ?? '120/80'));
+        $sistole  = (int)($tensi_parts[0] ?? 120);
+        $diastole = (int)($tensi_parts[1] ?? 80);
+        $tgl_daftar_pcare = date('d-m-Y', strtotime($data['tgl_registrasi']));
+
+        // Cari provider peserta di BPJS
+        $kd_provider = $pcare_cfg['kode_ppk'] ?: '0169B012';
+        if ($pcare_cfg['is_valid']) {
+            $peserta_res = PCareService::getPesertaByNoKartu($no_kartu);
+            if (isset($peserta_res['response']['kdProviderPst']['kdProvider'])) {
+                $kd_provider = $peserta_res['response']['kdProviderPst']['kdProvider'];
+            }
+        }
+
+        $payload_daftar = [
+            'kdProviderPeserta' => $kd_provider,
+            'tglDaftar'          => $tgl_daftar_pcare,
+            'noKartu'            => $no_kartu,
+            'kdPoli'             => $kd_poli_pcare,
+            'keluhan'            => $data['keluhan'] ?: 'Pemeriksaan Rawat Jalan',
+            'kunjSakit'          => true,
+            'sistole'            => $sistole,
+            'diastole'           => $diastole,
+            'beratBadan'         => (int)($data['berat'] ?: 60),
+            'tinggiBadan'        => (int)($data['tinggi'] ?: 165),
+            'respRate'           => (int)($data['respirasi'] ?: 20),
+            'heartRate'          => (int)($data['nadi'] ?: 80),
+            'lingkarPerut'       => (int)($data['lingkar_perut'] ?: 80),
+            'kdTkp'              => '10' // 10 = Rawat Jalan Tingkat Pertama
+        ];
+
+        if ($pcare_cfg['is_valid']) {
+            $pcare_res = PCareService::tambahPendaftaran($payload_daftar);
+            $code = $pcare_res['metadata']['code'] ?? 500;
+            $msg  = $pcare_res['metadata']['message'] ?? '';
+
+            if ($code == 200 || $code == 201) {
+                $no_urut_bpjs = $pcare_res['response']['message'] ?? ($pcare_res['response']['noUrut'] ?? '1');
+                if (is_numeric($no_urut_bpjs) || preg_match('/\d+/', $no_urut_bpjs)) {
+                    preg_match('/[A-Za-z0-9]+/', (string)$no_urut_bpjs, $matches);
+                    $no_urut_bpjs = $matches[0] ?? '1';
+                }
+
+                // Simpan ke pcare_pendaftaran
+                $no_rawat_esc   = $conn->real_escape_string($no_rawat);
+                $no_rm_esc      = $conn->real_escape_string($data['no_rkm_medis']);
+                $nm_pasien_esc  = $conn->real_escape_string($data['nm_pasien']);
+                $no_kartu_esc   = $conn->real_escape_string($no_kartu);
+                $keluhan_esc    = $conn->real_escape_string($payload_daftar['keluhan']);
+                $no_urut_esc    = $conn->real_escape_string($no_urut_bpjs);
+
+                $conn->query("
+                    INSERT INTO pcare_pendaftaran (
+                        no_rawat, tglDaftar, no_rkm_medis, nm_pasien, kdProviderPeserta, noKartu,
+                        kdPoli, nmPoli, keluhan, kunjSakit, sistole, diastole,
+                        beratBadan, tinggiBadan, respRate, lingkar_perut, heartRate, rujukBalik, kdTkp, noUrut, status
+                    ) VALUES (
+                        '$no_rawat_esc', '{$data['tgl_registrasi']}', '$no_rm_esc', '$nm_pasien_esc', '$kd_provider', '$no_kartu_esc',
+                        '$kd_poli_pcare', '$nm_poli_pcare', '$keluhan_esc', 'Kunjungan Sakit', '$sistole', '$diastole',
+                        '{$payload_daftar['beratBadan']}', '{$payload_daftar['tinggiBadan']}', '{$payload_daftar['respRate']}', '{$payload_daftar['lingkarPerut']}', '{$payload_daftar['heartRate']}', '0', '10 Rawat Jalan', '$no_urut_esc', 'Terkirim'
+                    ) ON DUPLICATE KEY UPDATE 
+                        noUrut = '$no_urut_esc', status = 'Terkirim'
+                ");
+
+                echo json_encode([
+                    'success' => true,
+                    'message' => "Pendaftaran berhasil terkirim ke PCare BPJS! No. Urut: {$no_urut_bpjs}",
+                    'noUrut'  => $no_urut_bpjs
+                ]);
+                exit;
+            } elseif ($code == 412 || stripos($msg, 'PRECONDITION') !== false) {
+                // Pasien sudah didaftarkan di PCare BPJS hari ini -> Cari No Urut yang sudah ada di PCare
+                $existing_no_urut = null;
+                for ($start = 0; $start < 150; $start += 15) {
+                    $list_pcare = PCareService::getPendaftaran($data['tgl_registrasi'], $start, 15);
+                    $items = $list_pcare['response']['list'] ?? [];
+                    if (empty($items)) break;
+                    foreach ($items as $it) {
+                        if (($it['peserta']['noKartu'] ?? '') === $no_kartu) {
+                            $existing_no_urut = (string)($it['noUrut'] ?? '');
+                            break 2;
+                        }
+                    }
+                }
+
+                if (!empty($existing_no_urut)) {
+                    $no_rawat_esc   = $conn->real_escape_string($no_rawat);
+                    $no_rm_esc      = $conn->real_escape_string($data['no_rkm_medis']);
+                    $nm_pasien_esc  = $conn->real_escape_string($data['nm_pasien']);
+                    $no_kartu_esc   = $conn->real_escape_string($no_kartu);
+                    $keluhan_esc    = $conn->real_escape_string($payload_daftar['keluhan']);
+                    $no_urut_esc    = $conn->real_escape_string($existing_no_urut);
+
+                    $conn->query("
+                        INSERT INTO pcare_pendaftaran (
+                            no_rawat, tglDaftar, no_rkm_medis, nm_pasien, kdProviderPeserta, noKartu,
+                            kdPoli, nmPoli, keluhan, kunjSakit, sistole, diastole,
+                            beratBadan, tinggiBadan, respRate, lingkar_perut, heartRate, rujukBalik, kdTkp, noUrut, status
+                        ) VALUES (
+                            '$no_rawat_esc', '{$data['tgl_registrasi']}', '$no_rm_esc', '$nm_pasien_esc', '$kd_provider', '$no_kartu_esc',
+                            '$kd_poli_pcare', '$nm_poli_pcare', '$keluhan_esc', 'Kunjungan Sakit', '$sistole', '$diastole',
+                            '{$payload_daftar['beratBadan']}', '{$payload_daftar['tinggiBadan']}', '{$payload_daftar['respRate']}', '{$payload_daftar['lingkarPerut']}', '{$payload_daftar['heartRate']}', '0', '10 Rawat Jalan', '$no_urut_esc', 'Terkirim'
+                        ) ON DUPLICATE KEY UPDATE 
+                            noUrut = '$no_urut_esc', status = 'Terkirim'
+                    ");
+
+                    echo json_encode([
+                        'success' => true,
+                        'message' => "Pasien sudah terdaftar di PCare BPJS hari ini. Tersinkron No. Urut: {$existing_no_urut}",
+                        'noUrut'  => $existing_no_urut
+                    ]);
+                    exit;
+                } else {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => "Gagal Pendaftaran PCare [Code 412]: Syarat pendaftaran ditolak oleh BPJS (cek status faskes / kartu BPJS)."
+                    ]);
+                    exit;
+                }
+            } else {
+                echo json_encode([
+                    'success' => false,
+                    'message' => "Gagal Pendaftaran PCare [Code {$code}]: {$msg}",
+                    'payload' => $payload_daftar
+                ]);
+                exit;
+            }
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Kredensial PCare belum dikonfigurasi.']);
+            exit;
+        }
+        break;
+
+    // ─── 2.8 Sinkronkan Semua Pendaftaran / Antrean PCare Hari Ini ─
+    case 'sinkron_semua_pcare':
+        $tgl_input = sanitize($_GET['tgl'] ?? $_POST['tgl'] ?? date('Y-m-d'));
+        $tgl_formatted = date('d-m-Y', strtotime($tgl_input));
+        $tgl_db = date('Y-m-d', strtotime($tgl_input));
+
+        if (!$pcare_cfg['is_valid']) {
+            echo json_encode(['success' => false, 'message' => 'Kredensial PCare belum dikonfigurasi.']);
+            exit;
+        }
+
+        $matched = 0;
+        $total_bpjs = 0;
+
+        for ($start = 0; $start < 300; $start += 15) {
+            $res = PCareService::getPendaftaran($tgl_formatted, $start, 15);
+            $list = $res['response']['list'] ?? [];
+            if (empty($list)) break;
+            
+            $total_bpjs = (int)($res['response']['count'] ?? count($list));
+
+            foreach ($list as $item) {
+                $noKartu = $item['peserta']['noKartu'] ?? '';
+                $noUrut  = $item['noUrut'] ?? '';
+                $nmPoli  = $item['poli']['nmPoli'] ?? 'Poli Umum';
+                $kdPoli  = $item['poli']['kdPoli'] ?? '001';
+                $keluhan = $item['keluhan'] ?? 'Pemeriksaan Rawat Jalan';
+                $kdProvider = $item['peserta']['kdProviderPst']['kdProvider'] ?? ($pcare_cfg['kode_ppk'] ?: '0169B012');
+
+                if (empty($noKartu)) continue;
+
+                $q = $conn->query("
+                    SELECT r.no_rawat, r.no_rkm_medis, p.nm_pasien
+                    FROM reg_periksa r
+                    JOIN pasien p ON r.no_rkm_medis = p.no_rkm_medis
+                    WHERE (p.no_peserta = '$noKartu' OR p.no_ktp = '$noKartu' OR r.no_rkm_medis = '{$item['peserta']['noKTP']}')
+                      AND r.tgl_registrasi = '$tgl_db'
+                    LIMIT 1
+                ");
+
+                if ($q && $q->num_rows > 0) {
+                    $row = $q->fetch_assoc();
+                    $no_rawat_esc = $conn->real_escape_string($row['no_rawat']);
+                    $no_rm_esc    = $conn->real_escape_string($row['no_rkm_medis']);
+                    $nm_pasien_esc= $conn->real_escape_string($row['nm_pasien']);
+                    $no_kartu_esc = $conn->real_escape_string($noKartu);
+                    $no_urut_esc  = $conn->real_escape_string($noUrut);
+
+                    $conn->query("
+                        INSERT INTO pcare_pendaftaran (
+                            no_rawat, tglDaftar, no_rkm_medis, nm_pasien, kdProviderPeserta, noKartu,
+                            kdPoli, nmPoli, keluhan, kunjSakit, sistole, diastole,
+                            beratBadan, tinggiBadan, respRate, lingkar_perut, heartRate, rujukBalik, kdTkp, noUrut, status
+                        ) VALUES (
+                            '$no_rawat_esc', '$tgl_db', '$no_rm_esc', '$nm_pasien_esc', '$kdProvider', '$no_kartu_esc',
+                            '$kdPoli', '$nmPoli', '$keluhan', 'Kunjungan Sakit', 120, 80,
+                            60, 165, 20, 80, 80, '0', '10 Rawat Jalan', '$no_urut_esc', 'Terkirim'
+                        ) ON DUPLICATE KEY UPDATE 
+                            noUrut = '$no_urut_esc', status = 'Terkirim'
+                    ");
+                    $matched++;
+                }
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => "Sinkronisasi antrean PCare selesai: {$matched} pasien berhasil dicocokkan dari total {$total_bpjs} data BPJS.",
+            'matched' => $matched,
+            'total_bpjs' => $total_bpjs
+        ]);
+        exit;
+        break;
+
+    // ─── 3. Sync / Kirim Kunjungan ke PCare BPJS (POST /kunjungan) ────────
+    case 'kirim_kunjungan':
     case 'sync_kunjungan':
         $no_rawat = $conn->real_escape_string(sanitize($_POST['no_rawat'] ?? ''));
         if (empty($no_rawat)) {
@@ -150,11 +399,15 @@ switch ($action) {
 
         // Ambil data kunjungan, SOAP & diagnosa
         $k_res = $conn->query("
-            SELECT r.*, p.nm_pasien, p.no_peserta, p.no_ktp,
-                   pr.suhu_tubuh, pr.tensi, pr.nadi, pr.respirasi, pr.tinggi, pr.berat, pr.keluhan, pr.penilaian,
-                   (SELECT dp.kd_penyakit FROM diagnosa_pasien dp WHERE dp.no_rawat = r.no_rawat AND dp.prioritas = 1 LIMIT 1) as kd_diagnosa
+            SELECT r.*, p.nm_pasien, p.no_peserta, p.no_ktp, p.no_rkm_medis,
+                   d.nm_dokter, pol.nm_poli,
+                   pr.suhu_tubuh, pr.tensi, pr.nadi, pr.respirasi, pr.tinggi, pr.berat, pr.lingkar_perut, pr.keluhan, pr.penilaian,
+                   (SELECT dp.kd_penyakit FROM diagnosa_pasien dp WHERE dp.no_rawat = r.no_rawat ORDER BY dp.prioritas ASC LIMIT 1) as kd_diagnosa,
+                   (SELECT pen.nm_penyakit FROM diagnosa_pasien dp LEFT JOIN penyakit pen ON dp.kd_penyakit = pen.kd_penyakit WHERE dp.no_rawat = r.no_rawat ORDER BY dp.prioritas ASC LIMIT 1) as nm_diagnosa
             FROM reg_periksa r
             JOIN pasien p ON r.no_rkm_medis = p.no_rkm_medis
+            LEFT JOIN dokter d ON r.kd_dokter = d.kd_dokter
+            LEFT JOIN poliklinik pol ON r.kd_poli = pol.kd_poli
             LEFT JOIN pemeriksaan_ralan pr ON r.no_rawat = pr.no_rawat
             WHERE r.no_rawat = '$no_rawat'
             LIMIT 1
@@ -162,17 +415,111 @@ switch ($action) {
 
         if ($k_res && $k_res->num_rows > 0) {
             $data = $k_res->fetch_assoc();
+            $no_kartu = trim($data['no_peserta'] ?: $data['no_ktp']);
+
+            if (empty($no_kartu)) {
+                echo json_encode(['success' => false, 'message' => 'Nomor Kartu BPJS / NIK pasien masih kosong.']);
+                exit;
+            }
+
+            // Mapping Dokter BPJS (contoh: D0000003 -> 462459)
+            $kd_dok_lokal = $conn->real_escape_string($data['kd_dokter']);
+            $map_dok = $conn->query("SELECT kd_dokter_pcare, nm_dokter_pcare FROM maping_dokter_pcare WHERE kd_dokter = '$kd_dok_lokal' LIMIT 1")->fetch_assoc();
+            $kd_dokter_pcare = $map_dok['kd_dokter_pcare'] ?? '0';
+
+            // Mapping Poli BPJS (contoh: UMU -> 001)
+            $kd_poli_lokal = $conn->real_escape_string($data['kd_poli']);
+            $map_poli = $conn->query("SELECT kd_poli_pcare, nm_poli_pcare FROM maping_poliklinik_pcare WHERE kd_poli_rs = '$kd_poli_lokal' LIMIT 1")->fetch_assoc();
+            $kd_poli_pcare = $map_poli['kd_poli_pcare'] ?? '001';
             
             // Format tensi (sistole/diastole)
             $tensi_parts = explode('/', str_replace(' ', '', $data['tensi'] ?? '120/80'));
             $sistole  = (int)($tensi_parts[0] ?? 120);
             $diastole = (int)($tensi_parts[1] ?? 80);
 
+            $tgl_daftar_pcare = date('d-m-Y', strtotime($data['tgl_registrasi']));
+            $tgl_pulang_pcare = date('d-m-Y', strtotime($data['tgl_registrasi']));
+
+            // ── AUTO-DAFTAR: Jika pasien belum terdaftar di pcare_pendaftaran hari ini, daftarkan dulu! ──
+            $chk_daftar = $conn->query("SELECT noUrut FROM pcare_pendaftaran WHERE no_rawat = '$no_rawat' AND status = 'Terkirim' LIMIT 1");
+            if (!$chk_daftar || $chk_daftar->num_rows === 0) {
+                if ($pcare_cfg['is_valid']) {
+                    $kd_provider = $pcare_cfg['kode_ppk'] ?: '0169B012';
+                    $peserta_res = PCareService::getPesertaByNoKartu($no_kartu);
+                    if (isset($peserta_res['response']['kdProviderPst']['kdProvider'])) {
+                        $kd_provider = $peserta_res['response']['kdProviderPst']['kdProvider'];
+                    }
+
+                    $payload_auto_daftar = [
+                        'kdProviderPeserta' => $kd_provider,
+                        'tglDaftar'          => $tgl_daftar_pcare,
+                        'noKartu'            => $no_kartu,
+                        'kdPoli'             => $kd_poli_pcare,
+                        'keluhan'            => $data['keluhan'] ?: 'Pemeriksaan Rawat Jalan',
+                        'kunjSakit'          => true,
+                        'sistole'            => $sistole,
+                        'diastole'           => $diastole,
+                        'beratBadan'         => (int)($data['berat'] ?: 60),
+                        'tinggiBadan'        => (int)($data['tinggi'] ?: 165),
+                        'respRate'           => (int)($data['respirasi'] ?: 20),
+                        'heartRate'          => (int)($data['nadi'] ?: 80),
+                        'lingkarPerut'       => (int)($data['lingkar_perut'] ?: 80),
+                        'kdTkp'              => '10'
+                    ];
+
+                    $res_auto_df = PCareService::tambahPendaftaran($payload_auto_daftar);
+                    $df_code = $res_auto_df['metadata']['code'] ?? 500;
+                    $auto_no_urut = '';
+                    if ($df_code == 200 || $df_code == 201) {
+                        $auto_no_urut = $res_auto_df['response']['message'] ?? ($res_auto_df['response']['noUrut'] ?? '1');
+                        if (is_numeric($auto_no_urut) || preg_match('/\d+/', $auto_no_urut)) {
+                            preg_match('/[A-Za-z0-9]+/', (string)$auto_no_urut, $m);
+                            $auto_no_urut = $m[0] ?? '1';
+                        }
+                    } elseif ($df_code == 412) {
+                        // Pasien sudah terdaftar di PCare hari ini
+                        for ($start = 0; $start < 150; $start += 15) {
+                            $list_pcare = PCareService::getPendaftaran($data['tgl_registrasi'], $start, 15);
+                            $items = $list_pcare['response']['list'] ?? [];
+                            if (empty($items)) break;
+                            foreach ($items as $it) {
+                                if (($it['peserta']['noKartu'] ?? '') === $no_kartu) {
+                                    $auto_no_urut = (string)($it['noUrut'] ?? '1');
+                                    break 2;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!empty($auto_no_urut)) {
+                        $no_rawat_esc   = $conn->real_escape_string($no_rawat);
+                        $no_rm_esc      = $conn->real_escape_string($data['no_rkm_medis']);
+                        $nm_pasien_esc  = $conn->real_escape_string($data['nm_pasien']);
+                        $no_kartu_esc   = $conn->real_escape_string($no_kartu);
+                        $keluhan_esc    = $conn->real_escape_string($payload_auto_daftar['keluhan']);
+                        $no_urut_esc    = $conn->real_escape_string($auto_no_urut);
+
+                        $conn->query("
+                            INSERT INTO pcare_pendaftaran (
+                                no_rawat, tglDaftar, no_rkm_medis, nm_pasien, kdProviderPeserta, noKartu,
+                                kdPoli, nmPoli, keluhan, kunjSakit, sistole, diastole,
+                                beratBadan, tinggiBadan, respRate, lingkar_perut, heartRate, rujukBalik, kdTkp, noUrut, status
+                            ) VALUES (
+                                '$no_rawat_esc', '{$data['tgl_registrasi']}', '$no_rm_esc', '$nm_pasien_esc', '$kd_provider', '$no_kartu_esc',
+                                '$kd_poli_pcare', '{$data['nm_poli']}', '$keluhan_esc', 'Kunjungan Sakit', '$sistole', '$diastole',
+                                '{$payload_auto_daftar['beratBadan']}', '{$payload_auto_daftar['tinggiBadan']}', '{$payload_auto_daftar['respRate']}', '{$payload_auto_daftar['lingkarPerut']}', '{$payload_auto_daftar['heartRate']}', '0', '10 Rawat Jalan', '$no_urut_esc', 'Terkirim'
+                            ) ON DUPLICATE KEY UPDATE 
+                                noUrut = '$no_urut_esc', status = 'Terkirim'
+                        ");
+                    }
+                }
+            }
+
             $payload = [
                 'noKunjungan'   => null,
-                'noKartu'       => $data['no_peserta'] ?: $data['no_ktp'],
-                'tglDaftar'     => date('d-m-Y', strtotime($data['tgl_registrasi'])),
-                'kdPoli'        => '001', // Poli Umum default FKTP
+                'noKartu'       => $no_kartu,
+                'tglDaftar'     => $tgl_daftar_pcare,
+                'kdPoli'        => $kd_poli_pcare,
                 'keluhan'       => $data['keluhan'] ?: 'Pemeriksaan Rawat Jalan',
                 'kdSadar'       => '01',  // Compos Mentis
                 'sistole'       => $sistole,
@@ -181,14 +528,24 @@ switch ($action) {
                 'tinggiBadan'   => (int)($data['tinggi'] ?: 165),
                 'respRate'      => (int)($data['respirasi'] ?: 20),
                 'heartRate'     => (int)($data['nadi'] ?: 80),
+                'lingkarPerut'  => (int)($data['lingkar_perut'] ?: 80),
                 'terapi'        => $data['penilaian'] ?: 'Terapi medikamentosa rawat jalan',
                 'kdStatusPulang'=> '3', // Berobat Jalan
-                'tglPulang'     => date('d-m-Y', strtotime($data['tgl_registrasi'])),
-                'kdDokter'      => '0',
+                'tglPulang'     => $tgl_pulang_pcare,
+                'kdDokter'      => $kd_dokter_pcare,
                 'kdDiag1'       => $data['kd_diagnosa'] ?: 'Z00.0',
                 'kdDiag2'       => null,
-                'kdDiag3'       => null
+                'kdDiag3'       => null,
+                'rujukLanjut'   => null,
+                'tacc'          => [
+                    'kdTacc'     => '-1',
+                    'alasanTacc' => null
+                ]
             ];
+
+            $no_kunjungan_bpjs = '';
+            $is_sent_live = false;
+            $error_bpjs = '';
 
             // Tembak PCare jika kredensial aktif
             if ($pcare_cfg['is_valid']) {
@@ -197,30 +554,65 @@ switch ($action) {
                 $msg  = $pcare_res['metadata']['message'] ?? '';
 
                 if ($code == 200 || $code == 201) {
+                    $is_sent_live = true;
                     $no_kunjungan_bpjs = $pcare_res['response']['noKunjungan'] ?? ('PC' . date('Ymd') . rand(1000, 9999));
-                    echo json_encode([
-                        'success' => true,
-                        'message' => "Bridging PCare Berhasil: Kunjungan tersimpan dengan No. {$no_kunjungan_bpjs}",
-                        'noKunjungan' => $no_kunjungan_bpjs,
-                        'response' => $pcare_res
-                    ]);
-                    exit;
                 } else {
+                    $penjelasan = "";
+                    if (stripos($msg, 'Unauthorized') !== false || $code == 404 || $code == 412) {
+                        $penjelasan = " (Pastikan pasien sudah didaftarkan di PCare BPJS hari ini & nomor kartu BPJS aktif).";
+                    }
                     echo json_encode([
                         'success' => false,
-                        'message' => "Gagal kirim PCare [Code {$code}]: {$msg}",
+                        'message' => "Bridging PCare [Code {$code}]: {$msg}{$penjelasan}",
                         'payload' => $payload,
                         'response' => $pcare_res
                     ]);
                     exit;
                 }
+            } else {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Kredensial PCare BPJS belum dikonfigurasi lengkap di menu Pengaturan Bridging.'
+                ]);
+                exit;
             }
 
-            // Fallback mode jika belum ada koneksi live
+            // Simpan status ke pcare_kunjungan_umum HANYA jika benar-benar berhasil ke BPJS
+            $no_rawat_esc     = $conn->real_escape_string($no_rawat);
+            $no_kunjungan_esc = $conn->real_escape_string($no_kunjungan_bpjs);
+            $no_rm_esc        = $conn->real_escape_string($data['no_rkm_medis']);
+            $nm_pasien_esc    = $conn->real_escape_string($data['nm_pasien']);
+            $no_kartu_esc     = $conn->real_escape_string($no_kartu);
+            $kd_poli_esc      = $conn->real_escape_string($data['kd_poli'] ?: '001');
+            $nm_poli_esc      = $conn->real_escape_string($data['nm_poli'] ?: 'Poli Umum');
+            $keluhan_esc      = $conn->real_escape_string($data['keluhan'] ?: 'Pemeriksaan Rawat Jalan');
+            $terapi_esc       = $conn->real_escape_string($data['penilaian'] ?: 'Terapi rawat jalan');
+            $kd_dokter_esc    = $conn->real_escape_string($data['kd_dokter'] ?: '0');
+            $nm_dokter_esc    = $conn->real_escape_string($data['nm_dokter'] ?: '-');
+            $kd_diag1_esc     = $conn->real_escape_string($data['kd_diagnosa'] ?: 'Z00.0');
+            $nm_diag1_esc     = $conn->real_escape_string($data['nm_diagnosa'] ?: 'Pemeriksaan Kesehatan');
+
+            $conn->query("
+                INSERT INTO pcare_kunjungan_umum (
+                    no_rawat, noKunjungan, tglDaftar, no_rkm_medis, nm_pasien, noKartu,
+                    kdPoli, nmPoli, keluhan, kdSadar, nmSadar, sistole, diastole,
+                    beratBadan, tinggiBadan, respRate, heartRate, lingkarPerut, terapi,
+                    kdStatusPulang, nmStatusPulang, tglPulang, kdDokter, nmDokter,
+                    kdDiag1, nmDiag1, kdDiag2, nmDiag2, kdDiag3, nmDiag3, status
+                ) VALUES (
+                    '$no_rawat_esc', '$no_kunjungan_esc', '{$data['tgl_registrasi']}', '$no_rm_esc', '$nm_pasien_esc', '$no_kartu_esc',
+                    '$kd_poli_esc', '$nm_poli_esc', '$keluhan_esc', '01', 'Compos Mentis', '$sistole', '$diastole',
+                    '{$payload['beratBadan']}', '{$payload['tinggiBadan']}', '{$payload['respRate']}', '{$payload['heartRate']}', '{$payload['lingkarPerut']}', '$terapi_esc',
+                    '3', 'Berobat Jalan', '{$data['tgl_registrasi']}', '$kd_dokter_esc', '$nm_dokter_esc',
+                    '$kd_diag1_esc', '$nm_diag1_esc', null, null, null, null, 'Terkirim'
+                ) ON DUPLICATE KEY UPDATE 
+                    noKunjungan = '$no_kunjungan_esc', status = 'Terkirim'
+            ");
+
             echo json_encode([
                 'success' => true,
-                'message' => "Mode Simulasi: Data kunjungan {$data['nm_pasien']} siap dikirim ke PCare. Kredensial belum live.",
-                'payload' => $payload
+                'message' => "Kunjungan berhasil terkirim ke PCare BPJS! No. Kunjungan: {$no_kunjungan_bpjs}",
+                'noKunjungan' => $no_kunjungan_bpjs
             ]);
         } else {
             echo json_encode(['success' => false, 'message' => 'Data kunjungan tidak ditemukan.']);
@@ -763,6 +1155,24 @@ switch ($action) {
         $tgl_pulang_pcare = date('d-m-Y', strtotime($tgl_pulang));
         $tgl_est_pcare    = date('d-m-Y', strtotime($tgl_est_rujuk));
 
+        $sub_spesialis_obj = null;
+        $khusus_obj = null;
+
+        if ($jenis_rujukan === 'khusus') {
+            $khusus_obj = [
+                'kdKhusus' => !empty($kd_khusus) ? $kd_khusus : null,
+                'catatan'  => !empty($catatan_khusus) ? $catatan_khusus : null
+            ];
+        } else {
+            $sub_spesialis_obj = [
+                'kdSubSpesialis1' => !empty($kd_subspesialis) ? $kd_subspesialis : null,
+                'kdSarana'        => !empty($kd_sarana) ? $kd_sarana : '1'
+            ];
+        }
+
+        $tacc_kd = ($kd_tacc === '0' || empty($kd_tacc) || $kd_tacc === '-1') ? '-1' : (string)$kd_tacc;
+        $tacc_alasan = ($tacc_kd === '-1') ? null : (!empty($alasan_tacc) ? $alasan_tacc : null);
+
         $payload_rujuk = [
             'noKunjungan'    => null,
             'noKartu'        => $no_kartu,
@@ -786,18 +1196,12 @@ switch ($action) {
             'rujukLanjut'    => [
                 'tglEstRujuk'  => $tgl_est_pcare,
                 'kdppk'        => $kd_ppk,
-                'subSpesialis' => [
-                    'kdSubSpesialis1' => $kd_subspesialis,
-                    'kdSarana'        => $kd_sarana
-                ],
-                'khusus'       => [
-                    'kdKhusus' => !empty($kd_khusus) ? $kd_khusus : null,
-                    'catatan'  => !empty($catatan_khusus) ? $catatan_khusus : null
-                ]
+                'subSpesialis' => $sub_spesialis_obj,
+                'khusus'       => $khusus_obj
             ],
             'tacc'           => [
-                'kdTacc'     => $kd_tacc ?: '0',
-                'alasanTacc' => !empty($alasan_tacc) ? $alasan_tacc : null
+                'kdTacc'     => $tacc_kd,
+                'alasanTacc' => $tacc_alasan
             ]
         ];
 
@@ -814,21 +1218,14 @@ switch ($action) {
                 $is_sent_live = true;
                 $no_kunjungan_bpjs = $pcare_res['response']['noKunjungan'] ?? ('PC' . date('Ymd') . rand(1000, 9999));
             } else {
-                $error_bpjs = "Gagal kirim rujukan ke PCare [Code {$code}]: {$msg}";
+                $error_bpjs = "Bridging BPJS [Code {$code}]: {$msg}";
+                // Fallback simpan lokal agar rekam medis & cetak surat rujukan tetap bisa berjalan
+                $no_kunjungan_bpjs = 'RUJ' . date('Ymd') . rand(1000, 9999);
             }
         } else {
             // Mode Simulasi / Offline
             $no_kunjungan_bpjs = 'RUJ' . date('Ymd') . rand(1000, 9999);
             $is_sent_live = true;
-        }
-
-        if (!$is_sent_live) {
-            echo json_encode([
-                'success' => false,
-                'message' => $error_bpjs,
-                'payload' => $payload_rujuk
-            ]);
-            exit;
         }
 
         // Simpan ke Database Lokal

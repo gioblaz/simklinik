@@ -1546,13 +1546,21 @@ inputIcd.addEventListener('input', () => {
     .then(r => r.json())
     .then(res => {
       if (res.data && res.data.length > 0) {
-        boxIcd.innerHTML = res.data.map(p => `
-          <div style="padding:8px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;"
-               onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#fff'"
-               onclick="pilihIcd('${p.kd_penyakit}', '${p.nm_penyakit.replace(/'/g, "\\'")}')">
-            <strong style="color:var(--primary-700);">${p.kd_penyakit}</strong> &mdash; ${p.nm_penyakit}
-          </div>
-        `).join('');
+        boxIcd.innerHTML = res.data.map(p => {
+          const isTacc = typeof isDiagnosaTACC === 'function' ? isDiagnosaTACC(p.kd_penyakit) : false;
+          const badgeTacc = isTacc ? '<span style="font-size:9.5px;background:#fef3c7;color:#b45309;border:1px solid #fde68a;padding:1px 6px;border-radius:3px;font-weight:800;margin-left:6px;"><i class="fas fa-exclamation-triangle"></i> TACC (144 Non-Spesialistik)</span>' : '';
+          return `
+            <div style="padding:8px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;align-items:center;justify-content:space-between;"
+                 onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#fff'"
+                 onclick="pilihIcd('${p.kd_penyakit}', '${p.nm_penyakit.replace(/'/g, "\\'")}')">
+              <div>
+                <strong style="color:var(--primary-700);">${p.kd_penyakit}</strong> &mdash; ${p.nm_penyakit}
+                ${badgeTacc}
+              </div>
+              <i class="fas fa-plus text-muted" style="font-size:11px;"></i>
+            </div>
+          `;
+        }).join('');
         boxIcd.style.display = 'block';
       } else {
         boxIcd.innerHTML = '<div style="padding:10px 14px;color:var(--gray-400);font-size:12px;">Penyakit tidak ditemukan</div>';
@@ -1566,6 +1574,13 @@ function pilihIcd(kd, nm) {
   document.getElementById('selectedKdPenyakit').value = kd;
   inputIcd.value = `${kd} - ${nm}`;
   boxIcd.style.display = 'none';
+
+  if (typeof isDiagnosaTACC === 'function' && isDiagnosaTACC(kd)) {
+    showTaccWarningModal({
+      kdDiag: kd,
+      nmDiag: nm
+    });
+  }
 }
 
 function tambahDiagnosaPasien() {

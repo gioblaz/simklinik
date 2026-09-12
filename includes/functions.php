@@ -359,4 +359,35 @@ function stat_permintaan_lab_menunggu(): int {
     }
 }
 
+/**
+ * Helper deteksi apakah diagnosa ICD-10 masuk dalam 144 Diagnosa Non-Spesialistik (TACC)
+ */
+function is_diagnosa_tacc(string $kd_penyakit): bool {
+    $tacc_prefixes = [
+        'A01', 'A03', 'A06', 'A09', 'A15', 'A16', 'A27', 'A35', 'A37', 'A46', 
+        'A51', 'A54', 'A59', 'A63', 'A74', 'A82', 'A90', 'A91', 
+        'B00', 'B01', 'B02', 'B05', 'B07', 'B08', 'B15', 'B20', 'B35', 'B36', 'B37', 'B50', 'B51', 'B52', 'B53', 'B54', 'B65', 'B68', 'B74', 'B76', 'B77', 'B79', 'B80', 'B85', 'B86',
+        'E11', 'E14', 'E16', 'E46', 'E50', 'E56', 'E66', 'E78', 'E79',
+        'F41', 'F45',
+        'G43', 'G44', 'G45', 'G47', 'G51',
+        'H00', 'H01', 'H02', 'H04', 'H10', 'H11', 'H15', 'H25', 'H52', 'H60', 'H61', 'H66',
+        'I10', 'I46', 'I84',
+        'J00', 'J01', 'J02', 'J03', 'J04', 'J10', 'J11', 'J18', 'J20', 'J30', 'J45',
+        'K12', 'K21', 'K29', 'K30', 'K35', 'K64', 'K81', 'K90', 'K92',
+        'L01', 'L02', 'L03', 'L08', 'L20', 'L21', 'L23', 'L24', 'L42', 'L50', 'L70', 'L73', 'L74',
+        'M10', 'M19',
+        'N39', 'N47', 'N61', 'N70', 'N72', 'N76', 'N89',
+        'O21', 'O42', 'O70', 'O72', 'O80', 'O92', 'O99',
+        'P55',
+        'R04', 'R56',
+        'T14', 'T15', 'T16', 'T17', 'T20', 'T21', 'T22', 'T23', 'T24', 'T25', 'T30', 'T31', 'T32', 'T62', 'T63', 'T75', 'T78',
+        'Z34'
+    ];
+    $clean = preg_replace('/[^A-Z0-9]/', '', strtoupper(trim($kd_penyakit)));
+    if (strlen($clean) < 3) return false;
+    $prefix3 = substr($clean, 0, 3);
+    return in_array($prefix3, $tacc_prefixes);
+}
+
+
 
