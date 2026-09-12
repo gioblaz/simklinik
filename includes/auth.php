@@ -66,6 +66,7 @@ function can_access(string $module): bool {
     // Sub-module / alias access
     if ($module === 'master_lab' && in_array('laboratorium', $modules, true)) return true;
     if ($module === 'bridging_monitor' && (in_array('settings', $modules, true) || in_array('pcare', $modules, true))) return true;
+    if ($module === 'mapping' && (in_array('settings', $modules, true) || in_array('pcare', $modules, true) || in_array('satu_sehat', $modules, true))) return true;
 
     return false;
 }

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * SIMKlinik — Modul Antrean Online BPJS Kesehatan (Mobile JKN & 7 Task Pelayanan)
  * Dilengkapi:
@@ -159,7 +159,7 @@ $tgl   = sanitize($_GET['tgl'] ?? $today);
 
 $antrian_res = $conn->query("
     SELECT r.no_rawat, r.no_reg, r.tgl_registrasi, r.jam_reg, r.kd_dokter, r.kd_poli, r.stts, r.kd_pj,
-           p.no_rkm_medis, p.nm_pasien, p.jk, p.tgl_lahir, p.no_peserta,
+           p.no_rkm_medis, p.nm_pasien, p.jk, p.tgl_lahir, p.no_peserta, p.alamat,
            pol.nm_poli, d.nm_dokter, pj.png_jawab as nm_penjab,
            COALESCE(ar.kodebooking, CONCAT('BK', DATE_FORMAT(r.tgl_registrasi, '%Y%m%d'), LPAD(r.no_reg, 4, '0'))) as kodebooking,
            COALESCE(ar.status_kirim, 'Aktif') as status_kirim
@@ -355,6 +355,12 @@ include dirname(__DIR__, 2) . '/includes/header.php';
                     <div style="font-size:11px;color:#64748b;margin-top:2px;">
                       RM: <b><?= $a['no_rkm_medis'] ?></b> &bull; <?= $a['no_peserta'] ? htmlspecialchars($a['no_peserta']) : 'Non-BPJS' ?>
                     </div>
+                    <?php if (!empty($a['alamat'])): ?>
+                      <div style="font-size:11px;color:#475569;margin-top:2px;display:flex;align-items:center;gap:3px;">
+                        <i class="fas fa-map-marker-alt" style="color:#0891b2;font-size:9.5px;flex-shrink:0;"></i>
+                        <span style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="<?= htmlspecialchars($a['alamat']) ?>"><?= htmlspecialchars($a['alamat']) ?></span>
+                      </div>
+                    <?php endif; ?>
                   </td>
                   <td style="padding:8px 12px;">
                     <div style="font-weight:600;color:#0f172a;"><?= htmlspecialchars($a['nm_poli'] ?: 'Poli Umum') ?></div>
@@ -1101,6 +1107,7 @@ function onSimSearchPasien(q) {
                onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#fff'"
                onclick='selectSimPasien(${JSON.stringify(p)})'>
             <b>${p.nm_pasien}</b> (RM: ${p.no_rkm_medis}) - ${p.no_peserta||'Non-BPJS'}
+            ${p.alamat ? `<div style="font-size:11px;color:#64748b;margin-top:1px;"><i class="fas fa-map-marker-alt text-primary" style="font-size:10px;"></i> ${p.alamat}</div>` : ''}
           </div>
         `).join('');
         resBox.style.display = 'block';

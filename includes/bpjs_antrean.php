@@ -239,6 +239,13 @@ class BpjsAntreanService {
     }
 
     /**
+     * Tambah Antrean Onsite / Bridging ke Server BPJS Antrean (POST /antrean/add)
+     */
+    public static function tambahAntrean(array $data): array {
+        return self::request('antrean/add', 'POST', $data);
+    }
+
+    /**
      * Batalkan Antrean Pasien
      */
     public static function batalAntrean(string $kodebooking, string $keterangan = 'Dibatalkan oleh Pasien/Klinik'): array {

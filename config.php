@@ -5,7 +5,7 @@
  */
 
 // ─── Konfigurasi Database ────────────────────────────────────────────────────
-define('DB_HOST', '7.7.7.105');
+define('DB_HOST', '111.68.26.150');
 define('DB_PORT', 3306);
 define('DB_USER', 'klinikbmy');
 define('DB_PASS', 'xkBjcGaPPhm5nRKB');

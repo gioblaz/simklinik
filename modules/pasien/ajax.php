@@ -26,7 +26,7 @@ switch ($action) {
     case 'cari':
         $q   = $conn->real_escape_string(sanitize($_GET['q'] ?? ''));
         $res = $conn->query("
-            SELECT p.no_rkm_medis, p.nm_pasien, p.jk, p.tgl_lahir,
+            SELECT p.no_rkm_medis, p.nm_pasien, p.jk, p.tgl_lahir, p.alamat,
                    p.no_ktp, p.no_peserta, p.no_tlp, p.kd_pj, pj.png_jawab as nm_penjab
             FROM pasien p
             LEFT JOIN penjab pj ON p.kd_pj = pj.kd_pj
@@ -35,6 +35,7 @@ switch ($action) {
                OR p.no_ktp LIKE '%$q%'
                OR p.no_peserta LIKE '%$q%'
                OR p.no_tlp LIKE '%$q%'
+               OR p.alamat LIKE '%$q%'
             ORDER BY p.nm_pasien ASC
             LIMIT 15
         ");

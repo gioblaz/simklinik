@@ -377,6 +377,7 @@ inputCari?.addEventListener('input', function() {
               RM: ${p.no_rkm_medis} | ${p.jk==='L'?'Laki-laki':'Perempuan'} | ${p.umur}
               ${p.no_peserta ? '| BPJS/Asuransi: '+p.no_peserta : ''}
             </div>
+            ${p.alamat ? `<div style="font-size:11px;color:#475569;margin-top:2px;display:flex;align-items:center;gap:4px;"><i class="fas fa-map-marker-alt text-primary" style="font-size:10px;"></i> <span>${p.alamat}</span></div>` : ''}
           </div>
         `).join('');
       }

@@ -57,6 +57,7 @@ if (isset($_GET['action']) || isset($_POST['action'])) {
 
     // 3. Simpan Pendaftaran (Tambah Baru atau Update Edit)
     if ($action === 'simpan_pendaftaran') {
+        ob_start();
         header('Content-Type: application/json');
         $mode        = sanitize($_POST['form_mode'] ?? 'tambah');
         $no_rawat    = $conn->real_escape_string(trim($_POST['no_rawat'] ?? ''));
@@ -70,14 +71,17 @@ if (isset($_GET['action']) || isset($_POST['action'])) {
         $no_peserta  = $conn->real_escape_string(trim($_POST['no_peserta'] ?? ''));
 
         if (empty($no_rm)) {
+            ob_end_clean();
             echo json_encode(['success' => false, 'message' => 'Silakan pilih pasien terlebih dahulu.']);
             exit;
         }
         if (empty($kd_poli)) {
+            ob_end_clean();
             echo json_encode(['success' => false, 'message' => 'Pilih poliklinik tujuan.']);
             exit;
         }
         if (empty($kd_dok)) {
+            ob_end_clean();
             echo json_encode(['success' => false, 'message' => 'Pilih dokter pemeriksa.']);
             exit;
         }
@@ -97,8 +101,10 @@ if (isset($_GET['action']) || isset($_POST['action'])) {
                 if (!empty($no_peserta) || !empty($kd_pj)) {
                     $conn->query("UPDATE pasien SET no_peserta = '$no_peserta', kd_pj = '$kd_pj' WHERE no_rkm_medis = '$no_rm'");
                 }
+                ob_end_clean();
                 echo json_encode(['success' => true, 'message' => "Pendaftaran No. Rawat $no_rawat berhasil diperbarui."]);
             } else {
+                ob_end_clean();
                 echo json_encode(['success' => false, 'message' => 'Gagal update: ' . $conn->error]);
             }
             exit;
@@ -109,19 +115,22 @@ if (isset($_GET['action']) || isset($_POST['action'])) {
             // Cek duplikasi pasien di poli yang sama hari ini
             $cek = $conn->query("SELECT no_rawat FROM reg_periksa WHERE no_rkm_medis = '$no_rm' AND tgl_registrasi = '$tgl_reg' AND kd_poli = '$kd_poli' AND stts != 'Batal' LIMIT 1");
             if ($cek && $cek->num_rows > 0) {
+                ob_end_clean();
                 echo json_encode(['success' => false, 'message' => 'Pasien sudah terdaftar di poliklinik ini pada tanggal tersebut.']);
                 exit;
             }
 
             // Ambil info pendukung pasien
             $p_info = $conn->query("
-                SELECT p.namakeluarga, p.alamatpj, p.keluarga, p.tgl_lahir, pol.registrasi as biaya_reg
+                SELECT p.nm_pasien, p.no_ktp, p.namakeluarga, p.alamatpj, p.keluarga, p.tgl_lahir, pol.registrasi as biaya_reg
                 FROM pasien p
                 LEFT JOIN poliklinik pol ON pol.kd_poli = '$kd_poli'
                 WHERE p.no_rkm_medis = '$no_rm'
                 LIMIT 1
             ")->fetch_assoc();
 
+            $p_nm_pasien= $p_info['nm_pasien'] ?? '';
+            $p_no_ktp   = $p_info['no_ktp'] ?? '';
             $p_jawab    = $conn->real_escape_string($p_info['namakeluarga'] ?? '-');
             $almt_pj    = $conn->real_escape_string($p_info['alamatpj'] ?? '-');
             $hubunganpj = $conn->real_escape_string($p_info['keluarga'] ?? '-');
@@ -169,21 +178,526 @@ if (isset($_GET['action']) || isset($_POST['action'])) {
                 BpjsAntreanService::updateTaskId($kodebooking, 2, $now_ms - 30000);
                 BpjsAntreanService::updateTaskId($kodebooking, 3, $now_ms);
 
-                echo json_encode(['success' => true, 'message' => "Pasien berhasil didaftarkan. No. Antrian: $no_reg | No. Rawat: $no_rawat"]);
+                // ── Auto Kirim Pendaftaran PCare BPJS ────────────────────────
+                $pcare_info = '';
+                $pj_row = $conn->query("SELECT png_jawab FROM penjab WHERE kd_pj='$kd_pj' LIMIT 1");
+                $nm_penjab_lower = strtolower($pj_row ? ($pj_row->fetch_assoc()['png_jawab'] ?? '') : '');
+                $is_bpjs_pj = (strtoupper($kd_pj) === 'BPJ' || str_contains($nm_penjab_lower, 'bpjs'));
+
+                if ($is_bpjs_pj && !empty($no_peserta)) {
+                    require_once dirname(__DIR__, 2) . '/includes/pcare_service.php';
+                    $pcare_cfg = PCareService::getConfig();
+
+                    if ($pcare_cfg['is_valid']) {
+                        // Ambil mapping poli PCare
+                        $map_poli_res  = $conn->query("SELECT kd_poli_pcare, nm_poli_pcare FROM maping_poliklinik_pcare WHERE kd_poli_rs = '$kd_poli' LIMIT 1");
+                        $map_poli      = $map_poli_res ? $map_poli_res->fetch_assoc() : null;
+                        $kd_poli_pcare = $map_poli['kd_poli_pcare'] ?? '001';
+                        $nm_poli_pcare = $map_poli['nm_poli_pcare'] ?? 'Poli Umum';
+                        $tgl_pcare     = date('d-m-Y', strtotime($tgl_reg));
+
+                        // Ambil kd_provider peserta dari BPJS
+                        $kd_provider = $pcare_cfg['kode_ppk'] ?: '0169B012';
+                        $peserta_res = PCareService::getPesertaByNoKartu($no_peserta);
+                        if (isset($peserta_res['response']['kdProviderPst']['kdProvider'])) {
+                            $kd_provider = $peserta_res['response']['kdProviderPst']['kdProvider'];
+                        }
+
+                        // Ambil mapping dokter BPJS
+                        $kd_dok_esc   = $conn->real_escape_string($kd_dok);
+                        $map_dok_res  = $conn->query("SELECT kd_dokter_pcare, nm_dokter_pcare FROM maping_dokter_pcare WHERE kd_dokter = '$kd_dok_esc' LIMIT 1");
+                        $map_dok      = $map_dok_res ? $map_dok_res->fetch_assoc() : null;
+                        $kd_dok_bpjs  = (int)($map_dok['kd_dokter_pcare'] ?? 512701);
+                        $nm_dok_bpjs  = $map_dok['nm_dokter_pcare'] ?? 'Dokter Jaga';
+
+                        // ── 1. Ambil Jadwal Dokter & Jam Praktek Sesuai HFIS BPJS ──
+                        $day_map  = ['Sun' => 'AKHAD', 'Mon' => 'SENIN', 'Tue' => 'SELASA', 'Wed' => 'RABU', 'Thu' => 'KAMIS', 'Fri' => 'JUMAT', 'Sat' => 'SABTU'];
+                        $hari_reg = $day_map[date('D', strtotime($tgl_reg))] ?? 'SENIN';
+                        $jam_praktek_bpjs = '08:00-12:00';
+
+                        $q_jadwal = $conn->query("
+                            SELECT jam_mulai, jam_selesai 
+                            FROM jadwal 
+                            WHERE kd_dokter = '$kd_dok_esc' AND hari_kerja = '$hari_reg'
+                            LIMIT 1
+                        ");
+                        if ($q_jadwal && $r_jadwal = $q_jadwal->fetch_assoc()) {
+                            $jam_praktek_bpjs = date('H:i', strtotime($r_jadwal['jam_mulai'])) . '-' . date('H:i', strtotime($r_jadwal['jam_selesai']));
+                        } else {
+                            $kd_poli_esc = $conn->real_escape_string($kd_poli);
+                            $q_jadwal2 = $conn->query("
+                                SELECT jam_mulai, jam_selesai 
+                                FROM jadwal 
+                                WHERE kd_poli = '$kd_poli_esc' AND hari_kerja = '$hari_reg'
+                                LIMIT 1
+                            ");
+                            if ($q_jadwal2 && $r_jadwal2 = $q_jadwal2->fetch_assoc()) {
+                                $jam_praktek_bpjs = date('H:i', strtotime($r_jadwal2['jam_mulai'])) . '-' . date('H:i', strtotime($r_jadwal2['jam_selesai']));
+                            }
+                        }
+
+                        // ── 2. Kirim via API Antrean Online BPJS (/antrean/add) ──
+                        $est_ts = strtotime("$tgl_reg 08:30:00") + (((int)$no_reg - 1) * 600);
+                        $payload_antrean = [
+                            'nomorkartu'     => $no_peserta,
+                            'nik'            => $p_no_ktp,
+                            'nohp'           => '081234567890',
+                            'kodepoli'       => $kd_poli_pcare,
+                            'namapoli'       => $nm_poli_pcare,
+                            'pasienbaru'     => 0,
+                            'norm'           => $no_rm,
+                            'tanggalperiksa' => $tgl_reg,
+                            'kodedokter'     => $kd_dok_bpjs,
+                            'namadokter'     => $nm_dok_bpjs,
+                            'jampraktek'     => $jam_praktek_bpjs,
+                            'jeniskunjungan' => 1,
+                            'nomorreferensi' => '',
+                            'nomorantrean'   => 'A-' . sprintf('%03d', (int)$no_reg),
+                            'angkaantrean'   => (int)$no_reg,
+                            'estimasidilayani'=> $est_ts * 1000,
+                            'sisakuotajkn'   => 30,
+                            'kuotajkn'       => 50,
+                            'sisakuotanonjkn'=> 20,
+                            'kuotanonjkn'    => 50,
+                            'keterangan'     => 'Pendaftaran Onsite SIMKlinik'
+                        ];
+
+                        $antrean_res  = BpjsAntreanService::tambahAntrean($payload_antrean);
+                        $antrean_code = $antrean_res['metadata']['code'] ?? 500;
+                        $antrean_msg  = $antrean_res['metadata']['message'] ?? '';
+
+                        $no_urut_terdaftar = '';
+
+                        // Jika Bridging Antrean sukses (200) atau sudah terdaftar (208)
+                        if ($antrean_code == 200 || $antrean_code == 208) {
+                            // Cari nomor urut di PCare yang digenerate oleh Antrean Online
+                            for ($start_idx = 0; $start_idx < 300; $start_idx += 15) {
+                                $list_res = PCareService::getPendaftaran($tgl_reg, $start_idx, 15);
+                                $items    = $list_res['response']['list'] ?? [];
+                                if (empty($items)) break;
+                                foreach ($items as $item) {
+                                    $it_kartu = $item['peserta']['noKartu'] ?? '';
+                                    $it_ktp   = $item['peserta']['noKTP'] ?? '';
+                                    $it_nama  = trim(strtolower($item['peserta']['nama'] ?? ''));
+                                    if ($it_kartu === $no_peserta || (!empty($p_no_ktp) && $it_ktp === $p_no_ktp) || (!empty($p_nm_pasien) && $it_nama === trim(strtolower($p_nm_pasien)))) {
+                                        $no_urut_terdaftar = (string)($item['noUrut'] ?? '');
+                                        break 2;
+                                    }
+                                }
+                            }
+                            if (empty($no_urut_terdaftar)) {
+                                $no_urut_terdaftar = 'A' . (int)$no_reg;
+                            }
+
+                            $no_urut_clean = preg_replace('/[^0-9A-Za-z]/', '', (string)$no_urut_terdaftar) ?: $no_urut_terdaftar;
+                            $no_urut_esc   = $conn->real_escape_string($no_urut_clean);
+                            $nm_poli_esc   = $conn->real_escape_string($nm_poli_pcare);
+                            $no_peserta_esc= $conn->real_escape_string($no_peserta);
+                            $kd_prov_esc   = $conn->real_escape_string($kd_provider);
+
+                            $conn->query("
+                                INSERT INTO pcare_pendaftaran (
+                                    no_rawat, tglDaftar, no_rkm_medis, kdProviderPeserta, noKartu,
+                                    kdPoli, nmPoli, keluhan, kunjSakit, sistole, diastole,
+                                    beratBadan, tinggiBadan, respRate, lingkar_perut, heartRate,
+                                    rujukBalik, kdTkp, noUrut, status
+                                ) VALUES (
+                                    '$no_rawat', '$tgl_reg', '$no_rm', '$kd_prov_esc', '$no_peserta_esc',
+                                    '$kd_poli_pcare', '$nm_poli_esc', 'Pemeriksaan Rawat Jalan',
+                                    'Kunjungan Sakit', 120, 80, 60, 165, 20, 80, 80, '0', '10', '$no_urut_esc', 'Terkirim'
+                                ) ON DUPLICATE KEY UPDATE noUrut = '$no_urut_esc', status = 'Terkirim'
+                            ");
+                            $pcare_info = " | ✅ Bridging Antrean BPJS: No. Urut #{$no_urut_clean}";
+
+                        } else {
+                            // Fallback jika API Antrean gagal (misal jadwal dokter belum dibuat di HFIS) → kirim via PCare REST
+                            $payload_pcare = [
+                                'kdProviderPeserta' => $kd_provider,
+                                'tglDaftar'         => $tgl_pcare,
+                                'noKartu'           => $no_peserta,
+                                'kdPoli'            => $kd_poli_pcare,
+                                'keluhan'           => 'Pemeriksaan Rawat Jalan',
+                                'kunjSakit'         => true,
+                                'sistole'           => 120,
+                                'diastole'          => 80,
+                                'beratBadan'        => 60,
+                                'tinggiBadan'       => 165,
+                                'respRate'          => 20,
+                                'heartRate'         => 80,
+                                'lingkarPerut'      => 80,
+                                'rujukBalik'        => '0',
+                                'kdTkp'             => '10',
+                            ];
+
+                            $pcare_res  = PCareService::tambahPendaftaran($payload_pcare);
+                            $pcare_code = $pcare_res['metadata']['code'] ?? 500;
+
+                            if ($pcare_code == 200 || $pcare_code == 201) {
+                                $no_urut       = $pcare_res['response']['message'] ?? ($pcare_res['response']['noUrut'] ?? '');
+                                $no_urut_clean = preg_replace('/[^0-9A-Za-z]/', '', (string)$no_urut) ?: $no_urut;
+                                $no_urut_esc   = $conn->real_escape_string($no_urut_clean);
+                                $nm_poli_esc   = $conn->real_escape_string($nm_poli_pcare);
+                                $no_peserta_esc= $conn->real_escape_string($no_peserta);
+                                $kd_prov_esc   = $conn->real_escape_string($kd_provider);
+                                $conn->query("
+                                    INSERT INTO pcare_pendaftaran (
+                                        no_rawat, tglDaftar, no_rkm_medis, kdProviderPeserta, noKartu,
+                                        kdPoli, nmPoli, keluhan, kunjSakit, sistole, diastole,
+                                        beratBadan, tinggiBadan, respRate, lingkar_perut, heartRate,
+                                        rujukBalik, kdTkp, noUrut, status
+                                    ) VALUES (
+                                        '$no_rawat', '$tgl_reg', '$no_rm', '$kd_prov_esc', '$no_peserta_esc',
+                                        '$kd_poli_pcare', '$nm_poli_esc', 'Pemeriksaan Rawat Jalan',
+                                        'Kunjungan Sakit', 120, 80, 60, 165, 20, 80, 80, '0', '10', '$no_urut_esc', 'Terkirim'
+                                    ) ON DUPLICATE KEY UPDATE noUrut = '$no_urut_esc', status = 'Terkirim'
+                                ");
+                                $pcare_info = " | ✅ PCare REST: No. Urut #{$no_urut_clean}";
+
+                            } elseif ($pcare_code == 412) {
+                                $existing_urut = null;
+                                for ($start_idx = 0; $start_idx < 300; $start_idx += 15) {
+                                    $list_res = PCareService::getPendaftaran($tgl_reg, $start_idx, 15);
+                                    $items    = $list_res['response']['list'] ?? [];
+                                    if (empty($items)) break;
+                                    foreach ($items as $item) {
+                                        $it_kartu = $item['peserta']['noKartu'] ?? '';
+                                        $it_ktp   = $item['peserta']['noKTP'] ?? '';
+                                        $it_nama  = trim(strtolower($item['peserta']['nama'] ?? ''));
+                                        if ($it_kartu === $no_peserta || (!empty($p_no_ktp) && $it_ktp === $p_no_ktp) || (!empty($p_nm_pasien) && $it_nama === trim(strtolower($p_nm_pasien)))) {
+                                            $existing_urut = (string)($item['noUrut'] ?? '');
+                                            break 2;
+                                        }
+                                    }
+                                }
+                                if (!empty($existing_urut)) {
+                                    $no_urut_esc    = $conn->real_escape_string($existing_urut);
+                                    $nm_poli_esc    = $conn->real_escape_string($nm_poli_pcare);
+                                    $no_peserta_esc = $conn->real_escape_string($no_peserta);
+                                    $kd_prov_esc    = $conn->real_escape_string($kd_provider);
+                                    $conn->query("
+                                        INSERT INTO pcare_pendaftaran (
+                                            no_rawat, tglDaftar, no_rkm_medis, kdProviderPeserta, noKartu,
+                                            kdPoli, nmPoli, keluhan, kunjSakit, sistole, diastole,
+                                            beratBadan, tinggiBadan, respRate, lingkar_perut, heartRate,
+                                            rujukBalik, kdTkp, noUrut, status
+                                        ) VALUES (
+                                            '$no_rawat', '$tgl_reg', '$no_rm', '$kd_prov_esc', '$no_peserta_esc',
+                                            '$kd_poli_pcare', '$nm_poli_esc', 'Pemeriksaan Rawat Jalan',
+                                            'Kunjungan Sakit', 120, 80, 60, 165, 20, 80, 80, '0', '10', '$no_urut_esc', 'Terkirim'
+                                        ) ON DUPLICATE KEY UPDATE noUrut = '$no_urut_esc', status = 'Terkirim'
+                                    ");
+                                    $pcare_info = " | ✅ PCare BPJS: No. Urut #{$existing_urut} (Tersinkron)";
+                                } else {
+                                    $pcare_info = ' | ⚠️ PCare: Pasien sudah terdaftar di PCare';
+                                }
+                            } else {
+                                $pcare_msg  = $pcare_res['metadata']['message'] ?? ($antrean_msg ?: 'Gagal');
+                                $pcare_info = " | ❌ BPJS: {$pcare_msg}";
+                            }
+                        }
+                    } else {
+                        $pcare_info = ' | ⚠️ PCare: Kredensial belum dikonfigurasi';
+                    }
+                }
+                // ─────────────────────────────────────────────────────────────
+
+                ob_end_clean();
+                echo json_encode(['success' => true, 'message' => "Pasien berhasil didaftarkan. No. Antrian: $no_reg | No. Rawat: $no_rawat{$pcare_info}"]);
             } else {
+                ob_end_clean();
                 echo json_encode(['success' => false, 'message' => 'Gagal mendaftar: ' . $conn->error]);
             }
             exit;
         }
     }
 
-    // 4. Update Status Cepat (Batal/Panggil)
+    // 4. Update Status Cepat (Batal)
     if ($action === 'batal') {
         header('Content-Type: application/json');
         $no_rawat = $conn->real_escape_string($_POST['no_rawat'] ?? '');
         $conn->query("UPDATE reg_periksa SET stts = 'Batal' WHERE no_rawat = '$no_rawat'");
         echo json_encode(['success' => true]);
         exit;
+    }
+
+    // 5. Hapus Registrasi Permanen (cascade delete semua data terkait)
+    if ($action === 'hapus_registrasi') {
+        ob_start(); // buffer stray output / PHP warnings
+        header('Content-Type: application/json');
+        $no_rawat = $conn->real_escape_string($_POST['no_rawat'] ?? '');
+        if (empty($no_rawat)) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'message' => 'No. Rawat tidak valid.']);
+            exit;
+        }
+        // Nonaktifkan FK checks & error reporting agar semua child table ikut terhapus
+        mysqli_report(MYSQLI_REPORT_OFF);
+        $conn->query("SET FOREIGN_KEY_CHECKS=0");
+        // Hapus tabel child yang TIDAK ON DELETE CASCADE (harus manual)
+        @$conn->query("DELETE FROM rawat_jl_dr              WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM rawat_jl_pr              WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM rawat_jl_drpr            WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM rawat_inap_dr            WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM rawat_inap_pr            WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM rawat_inap_drpr          WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM diagnosa_pasien          WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM periksa_lab              WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM detail_periksa_lab       WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM periksa_radiologi        WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM resep_obat               WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM resep_pulang             WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM obat_racikan             WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM detail_obat_racikan      WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM detail_pemberian_obat    WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM tambahan_biaya           WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM operasi                  WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM booking_operasi          WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM dpjp_ranap               WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM pcare_pendaftaran        WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM pcare_kunjungan_umum     WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM pcare_rujuk_subspesialis WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM pcare_rujuk_khusus       WHERE no_rawat = '$no_rawat'");
+        @$conn->query("DELETE FROM mlite_antrian_referensi  WHERE no_rawat = '$no_rawat'");
+        // Hapus registrasi utama (ON DELETE CASCADE akan hapus sisanya otomatis)
+        $ok  = $conn->query("DELETE FROM reg_periksa WHERE no_rawat = '$no_rawat'");
+        $aff = $conn->affected_rows;
+        $err = $conn->error;
+        $conn->query("SET FOREIGN_KEY_CHECKS=1");
+        ob_end_clean();
+        if ($ok && $aff > 0) {
+            echo json_encode(['success' => true,  'message' => "Registrasi No. Rawat $no_rawat beserta seluruh data terkait berhasil dihapus."]);
+        } elseif ($ok) {
+            echo json_encode(['success' => false, 'message' => "Data registrasi $no_rawat tidak ditemukan."]);
+        } else {
+            echo json_encode(['success' => false, 'message' => "Gagal menghapus: $err"]);
+        }
+        exit;
+    }
+
+    // 6. Sinkronisasi Antrean dari PCare / Mobile JKN
+    if ($action === 'sinkron_pcare') {
+        ob_start();
+        header('Content-Type: application/json');
+        require_once dirname(__DIR__, 2) . '/includes/pcare_service.php';
+        
+        $pcare_cfg = PCareService::getConfig();
+        if (!$pcare_cfg['is_valid']) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'message' => 'Kredensial PCare belum dikonfigurasi.']);
+            exit;
+        }
+
+        $tgl_target = sanitize($_POST['tgl'] ?? date('Y-m-d'));
+        $matched = 0;
+        $total_bpjs = 0;
+
+        for ($start_idx = 0; $start_idx < 300; $start_idx += 15) {
+            $res = PCareService::getPendaftaran($tgl_target, $start_idx, 15);
+            $list = $res['response']['list'] ?? [];
+            if (empty($list)) break;
+
+            foreach ($list as $item) {
+                $total_bpjs++;
+                $noKartu = $item['peserta']['noKartu'] ?? '';
+                $noKTP   = $item['peserta']['noKTP'] ?? '';
+                $nmPeserta = $conn->real_escape_string(trim($item['peserta']['nama'] ?? ''));
+                $noUrut  = $item['noUrut'] ?? '';
+                $nmPoli  = $item['poli']['nmPoli'] ?? 'Poli Umum';
+                $kdPoli  = $item['poli']['kdPoli'] ?? '001';
+                $keluhan = $item['keluhan'] ?? 'Pemeriksaan Rawat Jalan';
+                $kdProvider = $item['peserta']['kdProviderPst']['kdProvider'] ?? ($pcare_cfg['kode_ppk'] ?: '0169B012');
+
+                if (empty($noKartu) && empty($noKTP) && empty($nmPeserta)) continue;
+
+                $noKartu_esc = $conn->real_escape_string($noKartu);
+                $noKTP_esc   = $conn->real_escape_string($noKTP);
+                $q = $conn->query("
+                    SELECT r.no_rawat, r.no_rkm_medis, p.nm_pasien, p.no_peserta
+                    FROM reg_periksa r
+                    JOIN pasien p ON r.no_rkm_medis = p.no_rkm_medis
+                    WHERE (
+                        (p.no_peserta != '' AND p.no_peserta = '$noKartu_esc')
+                        OR (p.no_ktp != '' AND p.no_ktp = '$noKTP_esc')
+                        OR (p.no_ktp != '' AND p.no_ktp = '$noKartu_esc')
+                        OR (p.nm_pasien = '$nmPeserta')
+                    )
+                    AND r.tgl_registrasi = '$tgl_target'
+                    LIMIT 1
+                ");
+
+                if ($q && $q->num_rows > 0) {
+                    $row = $q->fetch_assoc();
+                    $no_rawat_esc = $conn->real_escape_string($row['no_rawat']);
+                    $no_rm_esc    = $conn->real_escape_string($row['no_rkm_medis']);
+                    $nm_pasien_esc= $conn->real_escape_string($row['nm_pasien']);
+                    $kartu_save   = $conn->real_escape_string($row['no_peserta'] ?: $noKartu);
+                    $no_urut_esc  = $conn->real_escape_string($noUrut);
+                    $nm_poli_esc  = $conn->real_escape_string($nmPoli);
+                    $keluhan_esc  = $conn->real_escape_string($keluhan);
+                    $kd_prov_esc  = $conn->real_escape_string($kdProvider);
+
+                    $conn->query("
+                        INSERT INTO pcare_pendaftaran (
+                            no_rawat, tglDaftar, no_rkm_medis, nm_pasien, kdProviderPeserta, noKartu,
+                            kdPoli, nmPoli, keluhan, kunjSakit, sistole, diastole,
+                            beratBadan, tinggiBadan, respRate, lingkar_perut, heartRate, rujukBalik, kdTkp, noUrut, status
+                        ) VALUES (
+                            '$no_rawat_esc', '$tgl_target', '$no_rm_esc', '$nm_pasien_esc', '$kd_prov_esc', '$kartu_save',
+                            '$kdPoli', '$nm_poli_esc', '$keluhan_esc', 'Kunjungan Sakit', 120, 80,
+                            60, 165, 20, 80, 80, '0', '10 Rawat Jalan', '$no_urut_esc', 'Terkirim'
+                        ) ON DUPLICATE KEY UPDATE 
+                            noUrut = '$no_urut_esc', status = 'Terkirim'
+                    ");
+                    $matched++;
+                }
+            }
+        }
+        ob_end_clean();
+        echo json_encode([
+            'success' => true,
+            'message' => "Tarik antrean selesai: {$matched} pasien berhasil dicocokkan & disinkronkan dari total {$total_bpjs} data di PCare BPJS.",
+            'matched' => $matched,
+            'total_bpjs' => $total_bpjs
+        ]);
+        exit;
+    }
+
+    // 7. Kirim Antrean Manual dari Form Sebelum Simpan
+    if ($action === 'kirim_antrean_manual_form') {
+        ob_start();
+        header('Content-Type: application/json');
+        require_once dirname(__DIR__, 2) . '/includes/pcare_service.php';
+        require_once dirname(__DIR__, 2) . '/includes/bpjs_antrean.php';
+
+        $no_rm      = sanitize($_POST['no_rkm_medis'] ?? '');
+        $no_peserta = sanitize($_POST['no_peserta'] ?? '');
+        $kd_poli    = sanitize($_POST['kd_poli'] ?? '');
+        $kd_dok     = sanitize($_POST['kd_dokter'] ?? '');
+        $tgl_reg    = sanitize($_POST['tgl_registrasi'] ?? date('Y-m-d'));
+        $no_reg     = sanitize($_POST['no_reg'] ?? '001');
+
+        if (empty($no_peserta)) {
+            $p_row = $conn->query("SELECT no_peserta, no_ktp, nm_pasien FROM pasien WHERE no_rkm_medis='$no_rm' LIMIT 1")->fetch_assoc();
+            $no_peserta = $p_row['no_peserta'] ?? '';
+            $no_ktp     = $p_row['no_ktp'] ?? '';
+            $nm_pasien  = $p_row['nm_pasien'] ?? '';
+        } else {
+            $p_row = $conn->query("SELECT no_ktp, nm_pasien FROM pasien WHERE no_rkm_medis='$no_rm' LIMIT 1")->fetch_assoc();
+            $no_ktp    = $p_row['no_ktp'] ?? '';
+            $nm_pasien = $p_row['nm_pasien'] ?? '';
+        }
+
+        if (empty($no_peserta)) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'message' => 'Nomor Kartu BPJS pasien masih kosong. Silakan lengkapi terlebih dahulu.']);
+            exit;
+        }
+
+        // Mapping Poli & Dokter
+        $map_poli_res  = $conn->query("SELECT kd_poli_pcare, nm_poli_pcare FROM maping_poliklinik_pcare WHERE kd_poli_rs = '$kd_poli' LIMIT 1");
+        $map_poli      = $map_poli_res ? $map_poli_res->fetch_assoc() : null;
+        $kd_poli_pcare = $map_poli['kd_poli_pcare'] ?? '001';
+        $nm_poli_pcare = $map_poli['nm_poli_pcare'] ?? 'Poli Umum';
+
+        $kd_dok_esc   = $conn->real_escape_string($kd_dok);
+        $map_dok_res  = $conn->query("SELECT kd_dokter_pcare, nm_dokter_pcare FROM maping_dokter_pcare WHERE kd_dokter = '$kd_dok_esc' LIMIT 1");
+        $map_dok      = $map_dok_res ? $map_dok_res->fetch_assoc() : null;
+        $kd_dok_bpjs  = (int)($map_dok['kd_dokter_pcare'] ?? 512701);
+        $nm_dok_bpjs  = $map_dok['nm_dokter_pcare'] ?? 'Dokter Jaga';
+
+        // Ambil Jadwal Dokter Sesuai HFIS BPJS
+        $day_map  = ['Sun' => 'AKHAD', 'Mon' => 'SENIN', 'Tue' => 'SELASA', 'Wed' => 'RABU', 'Thu' => 'KAMIS', 'Fri' => 'JUMAT', 'Sat' => 'SABTU'];
+        $hari_reg = $day_map[date('D', strtotime($tgl_reg))] ?? 'SENIN';
+        $jam_praktek_bpjs = '08:00-12:00';
+
+        $q_jadwal = $conn->query("
+            SELECT jam_mulai, jam_selesai 
+            FROM jadwal 
+            WHERE kd_dokter = '$kd_dok_esc' AND hari_kerja = '$hari_reg'
+            LIMIT 1
+        ");
+        if ($q_jadwal && $r_jadwal = $q_jadwal->fetch_assoc()) {
+            $jam_praktek_bpjs = date('H:i', strtotime($r_jadwal['jam_mulai'])) . '-' . date('H:i', strtotime($r_jadwal['jam_selesai']));
+        } else {
+            $kd_poli_esc = $conn->real_escape_string($kd_poli);
+            $q_jadwal2 = $conn->query("
+                SELECT jam_mulai, jam_selesai 
+                FROM jadwal 
+                WHERE kd_poli = '$kd_poli_esc' AND hari_kerja = '$hari_reg'
+                LIMIT 1
+            ");
+            if ($q_jadwal2 && $r_jadwal2 = $q_jadwal2->fetch_assoc()) {
+                $jam_praktek_bpjs = date('H:i', strtotime($r_jadwal2['jam_mulai'])) . '-' . date('H:i', strtotime($r_jadwal2['jam_selesai']));
+            }
+        }
+
+        // Kirim via Antrean BPJS Online (/antrean/add)
+        $est_ts = strtotime("$tgl_reg 08:30:00") + (((int)$no_reg - 1) * 600);
+        $payload_antrean = [
+            'nomorkartu'     => $no_peserta,
+            'nik'            => $no_ktp,
+            'nohp'           => '081234567890',
+            'kodepoli'       => $kd_poli_pcare,
+            'namapoli'       => $nm_poli_pcare,
+            'pasienbaru'     => 0,
+            'norm'           => $no_rm,
+            'tanggalperiksa' => $tgl_reg,
+            'kodedokter'     => $kd_dok_bpjs,
+            'namadokter'     => $nm_dok_bpjs,
+            'jampraktek'     => $jam_praktek_bpjs,
+            'jeniskunjungan' => 1,
+            'nomorreferensi' => '',
+            'nomorantrean'   => 'A-' . sprintf('%03d', (int)$no_reg),
+            'angkaantrean'   => (int)$no_reg,
+            'estimasidilayani'=> $est_ts * 1000,
+            'sisakuotajkn'   => 30,
+            'kuotajkn'       => 50,
+            'sisakuotanonjkn'=> 20,
+            'kuotanonjkn'    => 50,
+            'keterangan'     => 'Pendaftaran Onsite SIMKlinik'
+        ];
+
+        $antrean_res  = BpjsAntreanService::tambahAntrean($payload_antrean);
+        $antrean_code = $antrean_res['metadata']['code'] ?? 500;
+        $antrean_msg  = $antrean_res['metadata']['message'] ?? '';
+
+        $no_urut = '';
+
+        if ($antrean_code == 200 || $antrean_code == 208) {
+            // Berhasil terdaftar via Bridging Antrean → Scan PCare untuk mengambil nomor urut antrean asli
+            for ($start_idx = 0; $start_idx < 300; $start_idx += 15) {
+                $list_res = PCareService::getPendaftaran($tgl_reg, $start_idx, 15);
+                $items    = $list_res['response']['list'] ?? [];
+                if (empty($items)) break;
+                foreach ($items as $item) {
+                    $it_kartu = $item['peserta']['noKartu'] ?? '';
+                    $it_ktp   = $item['peserta']['noKTP'] ?? '';
+                    $it_nama  = trim(strtolower($item['peserta']['nama'] ?? ''));
+                    if ($it_kartu === $no_peserta || (!empty($no_ktp) && $it_ktp === $no_ktp) || (!empty($nm_pasien) && $it_nama === trim(strtolower($nm_pasien)))) {
+                        $no_urut = (string)($item['noUrut'] ?? '');
+                        break 2;
+                    }
+                }
+            }
+            if (empty($no_urut)) {
+                $no_urut = 'A' . (int)$no_reg;
+            }
+
+            ob_end_clean();
+            echo json_encode([
+                'success' => true,
+                'no_urut' => $no_urut,
+                'message' => "Antrean BPJS Berhasil Terkirim via Bridging Antrean! No. Urut: {$no_urut}. Silakan klik 'Simpan Pendaftaran' untuk menyelesaikan."
+            ]);
+            exit;
+        } else {
+            ob_end_clean();
+            echo json_encode([
+                'success' => false,
+                'message' => "Respon BPJS Antrean [Code {$antrean_code}]: {$antrean_msg}"
+            ]);
+            exit;
+        }
     }
 }
 
@@ -202,7 +716,7 @@ if ($kd_dokter) $where .= " AND r.kd_dokter = '" . $conn->real_escape_string($kd
 if ($status)    $where .= " AND r.stts = '" . $conn->real_escape_string($status) . "'";
 if ($search) {
     $s = $conn->real_escape_string($search);
-    $where .= " AND (p.nm_pasien LIKE '%$s%' OR p.no_rkm_medis LIKE '%$s%' OR r.no_rawat LIKE '%$s%')";
+    $where .= " AND (p.nm_pasien LIKE '%$s%' OR p.no_rkm_medis LIKE '%$s%' OR r.no_rawat LIKE '%$s%' OR p.alamat LIKE '%$s%')";
 }
 
 // Pengurutan (Sorting)
@@ -330,6 +844,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_live_pendaftaran') {
                 <div style="font-size:11px;color:#64748b;margin-top:3px;">
                   MR: <strong style="color:#0f766e;"><?= $k['no_rkm_medis'] ?></strong> &bull; <?= hitung_umur($k['tgl_lahir']) ?>
                 </div>
+                <?php if (!empty($k['alamat'])): ?>
+                  <div style="font-size:11px;color:#475569;margin-top:3px;display:flex;align-items:center;gap:4px;">
+                    <i class="fas fa-map-marker-alt" style="color:#0891b2;font-size:10px;flex-shrink:0;"></i>
+                    <span style="max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="<?= htmlspecialchars($k['alamat']) ?>"><?= htmlspecialchars($k['alamat']) ?></span>
+                  </div>
+                <?php endif; ?>
               </div>
             </div>
           </td>
@@ -347,28 +867,23 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_live_pendaftaran') {
           <td style="padding:9px 10px;">
             <?php if ($is_bpjs): ?>
               <div style="display:flex;flex-direction:column;gap:3px;">
-                <!-- Step 1: Pendaftaran PCare -->
-                <div style="display:flex;align-items:center;gap:4px;">
-                  <?php if ($has_daftar_pcare): ?>
+                <?php if ($has_daftar_pcare): ?>
+                  <div style="display:flex;align-items:center;gap:4px;">
                     <span style="font-size:10px;font-weight:700;color:#0369a1;background:#e0f2fe;padding:2px 6px;border-radius:4px;display:inline-flex;align-items:center;gap:3px;" title="Terdaftar di PCare BPJS">
                       <i class="fas fa-id-badge"></i> Urut #<?= htmlspecialchars($k['no_urut_pcare']) ?>
                     </span>
-                  <?php else: ?>
-                    <button type="button" class="btn btn-sm btn-outline-info" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;" title="Step 1: Kirim Pendaftaran Pasien ke PCare BPJS" onclick="kirimPendaftaranPcareRow('<?= htmlspecialchars($k['no_rawat']) ?>')">
-                      <i class="fas fa-user-plus"></i> 1. Daftar PCare
-                    </button>
-                  <?php endif; ?>
-                </div>
+                  </div>
+                <?php endif; ?>
 
-                <!-- Step 2: Kunjungan PCare -->
+                <!-- Kunjungan PCare -->
                 <div style="display:flex;align-items:center;gap:4px;">
                   <?php if ($has_kunj_pcare): ?>
                     <span style="font-size:10px;font-weight:700;color:#047857;background:#d1fae5;padding:2px 6px;border-radius:4px;display:inline-flex;align-items:center;gap:3px;" title="Kunjungan PCare Terkirim">
                       <i class="fas fa-check-circle"></i> Kunjungan OK
                     </span>
                   <?php else: ?>
-                    <button type="button" class="btn btn-sm btn-outline-primary" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;" title="Step 2: Kirim Kunjungan / SOAP ke PCare BPJS" onclick="kirimKunjunganPcareRow('<?= htmlspecialchars($k['no_rawat']) ?>')">
-                      <i class="fas fa-cloud-arrow-up"></i> 2. Kirim PCare
+                    <button type="button" class="btn btn-sm btn-outline-primary" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;" title="Kirim Kunjungan / SOAP ke PCare BPJS" onclick="kirimKunjunganPcareRow('<?= htmlspecialchars($k['no_rawat']) ?>')">
+                      <i class="fas fa-cloud-arrow-up"></i> Kirim Kunjungan PCare
                     </button>
                   <?php endif; ?>
                 </div>
@@ -409,6 +924,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_live_pendaftaran') {
                 <button type="button" class="btn btn-sm btn-outline" style="padding:5px 8px;font-size:11.5px;color:#ef4444;border-color:#fca5a5;" title="Batalkan Kunjungan"
                         onclick="ubahStatus('<?= $k['no_rawat'] ?>', 'batal')">
                   <i class="fas fa-times"></i>
+                </button>
+              <?php endif; ?>
+              <?php if ($k['stts'] === 'Batal' || $k['stts'] === 'Belum'): ?>
+                <button type="button" class="btn btn-sm btn-outline" style="padding:5px 8px;font-size:11.5px;color:#dc2626;border-color:#dc2626;background:#fff5f5;" title="Hapus Registrasi Permanen"
+                        onclick="hapusRegistrasi('<?= htmlspecialchars($k['no_rawat']) ?>', '<?= htmlspecialchars($k['nm_pasien']) ?>')">
+                  <i class="fas fa-trash-alt"></i>
                 </button>
               <?php endif; ?>
             </div>
@@ -516,11 +1037,14 @@ include dirname(__DIR__, 2) . '/includes/header.php';
 
               <!-- Selected Pasien Badge -->
               <div id="formSelectedPasienPill" style="display:none;align-items:center;justify-content:space-between;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:6px 12px;font-size:12.5px;">
-                <div style="display:flex;align-items:center;gap:8px;">
-                  <i class="fas fa-user-check" style="color:#2563eb;"></i>
-                  <strong id="pillNamaPasien" style="color:#1e3a8a;"></strong>
-                  <span id="pillRmPasien" style="color:#3b82f6;font-size:11.5px;"></span>
-                  <span id="pillUmurPasien" style="color:#64748b;font-size:11.5px;"></span>
+                <div style="display:flex;flex-direction:column;gap:2px;">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-user-check" style="color:#2563eb;"></i>
+                    <strong id="pillNamaPasien" style="color:#1e3a8a;"></strong>
+                    <span id="pillRmPasien" style="color:#3b82f6;font-size:11.5px;"></span>
+                    <span id="pillUmurPasien" style="color:#64748b;font-size:11.5px;"></span>
+                  </div>
+                  <div id="pillAlamatPasien" style="font-size:11px;color:#475569;margin-left:22px;display:none;"></div>
                 </div>
                 <button type="button" class="btn btn-sm btn-outline" style="padding:2px 6px;font-size:11px;color:#ef4444;border-color:#fca5a5;" onclick="clearSelectedPasien()">
                   <i class="fas fa-times"></i> Ganti
@@ -576,13 +1100,21 @@ include dirname(__DIR__, 2) . '/includes/header.php';
           </div>
 
           <!-- Action Buttons -->
-          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;padding-top:10px;border-top:1px solid #f1f5f9;">
-            <button type="button" class="btn btn-secondary" style="padding:8px 18px;font-size:12.5px;" onclick="closeFormPendaftaran()">
-              Batal / Tutup
-            </button>
-            <button type="submit" id="btnSubmitForm" class="btn btn-primary" style="padding:8px 24px;font-size:12.5px;font-weight:700;">
-              <i class="fas fa-save"></i> Simpan Pendaftaran
-            </button>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;padding-top:10px;border-top:1px solid #f1f5f9;flex-wrap:wrap;">
+            <div id="badgeStatusAntreanBpjsForm" style="display:none;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#0369a1;background:#e0f2fe;padding:6px 12px;border-radius:6px;border:1px solid #bae6fd;">
+              <i class="fas fa-check-circle" style="color:#0284c7;"></i> Antrean BPJS Terkirim: <span id="textNoUrutBpjsForm"></span>
+            </div>
+            <div style="display:flex;gap:8px;margin-left:auto;">
+              <button type="button" class="btn btn-secondary" style="padding:8px 18px;font-size:12.5px;" onclick="closeFormPendaftaran()">
+                Batal / Tutup
+              </button>
+              <button type="button" id="btnKirimAntreanManual" class="btn btn-outline" style="padding:8px 16px;font-size:12.5px;color:#0369a1;border-color:#0284c7;background:#f0f9ff;display:inline-flex;align-items:center;gap:6px;" onclick="kirimAntreanSebelumSimpan(this)" title="Kirim data antrean ke BPJS sebelum menyimpan">
+                <i class="fas fa-tower-broadcast"></i> Kirim Antrean BPJS
+              </button>
+              <button type="submit" id="btnSubmitForm" class="btn btn-primary" style="padding:8px 24px;font-size:12.5px;font-weight:700;">
+                <i class="fas fa-save"></i> Simpan Pendaftaran
+              </button>
+            </div>
           </div>
 
         </div>
@@ -724,6 +1256,12 @@ include dirname(__DIR__, 2) . '/includes/header.php';
                       <div style="font-size:11px;color:#64748b;margin-top:3px;">
                         MR: <strong style="color:#0f766e;"><?= $k['no_rkm_medis'] ?></strong> &bull; <?= hitung_umur($k['tgl_lahir']) ?>
                       </div>
+                      <?php if (!empty($k['alamat'])): ?>
+                        <div style="font-size:11px;color:#475569;margin-top:3px;display:flex;align-items:center;gap:4px;">
+                          <i class="fas fa-map-marker-alt" style="color:#0891b2;font-size:10px;flex-shrink:0;"></i>
+                          <span style="max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="<?= htmlspecialchars($k['alamat']) ?>"><?= htmlspecialchars($k['alamat']) ?></span>
+                        </div>
+                      <?php endif; ?>
                     </div>
                   </div>
                 </td>
@@ -741,28 +1279,23 @@ include dirname(__DIR__, 2) . '/includes/header.php';
                 <td style="padding:9px 10px;">
                   <?php if ($is_bpjs): ?>
                     <div style="display:flex;flex-direction:column;gap:3px;">
-                      <!-- Step 1: Pendaftaran PCare -->
-                      <div style="display:flex;align-items:center;gap:4px;">
-                        <?php if ($has_daftar_pcare): ?>
+                      <?php if ($has_daftar_pcare): ?>
+                        <div style="display:flex;align-items:center;gap:4px;">
                           <span style="font-size:10px;font-weight:700;color:#0369a1;background:#e0f2fe;padding:2px 6px;border-radius:4px;display:inline-flex;align-items:center;gap:3px;" title="Terdaftar di PCare BPJS">
                             <i class="fas fa-id-badge"></i> Urut #<?= htmlspecialchars($k['no_urut_pcare']) ?>
                           </span>
-                        <?php else: ?>
-                          <button type="button" class="btn btn-sm btn-outline-info" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;" title="Step 1: Kirim Pendaftaran Pasien ke PCare BPJS" onclick="kirimPendaftaranPcareRow('<?= htmlspecialchars($k['no_rawat']) ?>')">
-                            <i class="fas fa-user-plus"></i> 1. Daftar PCare
-                          </button>
-                        <?php endif; ?>
-                      </div>
+                        </div>
+                      <?php endif; ?>
 
-                      <!-- Step 2: Kunjungan PCare -->
+                      <!-- Kunjungan PCare -->
                       <div style="display:flex;align-items:center;gap:4px;">
                         <?php if ($has_kunj_pcare): ?>
                           <span style="font-size:10px;font-weight:700;color:#047857;background:#d1fae5;padding:2px 6px;border-radius:4px;display:inline-flex;align-items:center;gap:3px;" title="Kunjungan PCare Terkirim">
                             <i class="fas fa-check-circle"></i> Kunjungan OK
                           </span>
                         <?php else: ?>
-                          <button type="button" class="btn btn-sm btn-outline-primary" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;" title="Step 2: Kirim Kunjungan / SOAP ke PCare BPJS" onclick="kirimKunjunganPcareRow('<?= htmlspecialchars($k['no_rawat']) ?>')">
-                            <i class="fas fa-cloud-arrow-up"></i> 2. Kirim PCare
+                          <button type="button" class="btn btn-sm btn-outline-primary" style="padding:2px 6px;font-size:10.5px;white-space:nowrap;" title="Kirim Kunjungan / SOAP ke PCare BPJS" onclick="kirimKunjunganPcareRow('<?= htmlspecialchars($k['no_rawat']) ?>')">
+                            <i class="fas fa-cloud-arrow-up"></i> Kirim Kunjungan PCare
                           </button>
                         <?php endif; ?>
                       </div>
@@ -803,6 +1336,12 @@ include dirname(__DIR__, 2) . '/includes/header.php';
                       <button type="button" class="btn btn-sm btn-outline" style="padding:5px 8px;font-size:11.5px;color:#ef4444;border-color:#fca5a5;" title="Batalkan Kunjungan"
                               onclick="ubahStatus('<?= $k['no_rawat'] ?>', 'batal')">
                         <i class="fas fa-times"></i>
+                      </button>
+                    <?php endif; ?>
+                    <?php if ($k['stts'] === 'Batal' || $k['stts'] === 'Belum'): ?>
+                      <button type="button" class="btn btn-sm btn-outline" style="padding:5px 8px;font-size:11.5px;color:#dc2626;border-color:#dc2626;background:#fff5f5;" title="Hapus Registrasi Permanen"
+                              onclick="hapusRegistrasi('<?= htmlspecialchars($k['no_rawat']) ?>', '<?= htmlspecialchars($k['nm_pasien']) ?>')">
+                        <i class="fas fa-trash-alt"></i>
                       </button>
                     <?php endif; ?>
                   </div>
@@ -901,7 +1440,8 @@ function openFormEdit(noRawat) {
           nm_pasien: d.nm_pasien,
           umur: d.umur || '',
           kd_pj: d.kd_pj,
-          no_peserta: d.no_peserta
+          no_peserta: d.no_peserta,
+          alamat: d.alamat || ''
         });
 
         // Load doctors for this poli and select existing doctor
@@ -999,14 +1539,15 @@ function onSearchPasien(query) {
     .then(res => {
       if (res.success && res.data && res.data.length > 0) {
         dropdown.innerHTML = res.data.map(p => `
-          <div style="padding:8px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;justify-content:space-between;align-items:center;"
+          <div style="padding:8px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;"
                onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#fff'"
                onclick='selectPasienItem(${JSON.stringify(p)})'>
-            <div>
+            <div style="flex:1;min-width:0;">
               <strong style="color:#0f172a;font-size:13px;">${p.nm_pasien}</strong>
-              <div style="font-size:11px;color:#64748b;">No. RM: <b>${p.no_rkm_medis}</b> &bull; ${p.umur||''} &bull; ${p.no_ktp||'-'}</div>
+              <div style="font-size:11px;color:#64748b;margin-top:2px;">No. RM: <b>${p.no_rkm_medis}</b> &bull; ${p.umur||''} &bull; ${p.no_ktp||'-'}</div>
+              ${p.alamat ? `<div style="font-size:11px;color:#475569;margin-top:3px;display:flex;align-items:center;gap:4px;"><i class="fas fa-map-marker-alt" style="color:#0891b2;font-size:10px;flex-shrink:0;"></i> <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.alamat}</span></div>` : ''}
             </div>
-            <span class="badge badge-light" style="font-size:10.5px;">${p.nm_penjab||'Umum'}</span>
+            <span class="badge badge-light" style="font-size:10.5px;flex-shrink:0;">${p.nm_penjab||'Umum'}</span>
           </div>
         `).join('');
         dropdown.style.display = 'block';
@@ -1024,6 +1565,17 @@ function selectPasienItem(p) {
   document.getElementById('pillRmPasien').innerText = `(RM: ${p.no_rkm_medis})`;
   document.getElementById('pillUmurPasien').innerText = p.umur ? `• ${p.umur}` : '';
 
+  const elAlamat = document.getElementById('pillAlamatPasien');
+  if (elAlamat) {
+    if (p.alamat) {
+      elAlamat.innerHTML = `<i class="fas fa-map-marker-alt" style="color:#0891b2;font-size:10px;margin-right:4px;"></i>${p.alamat}`;
+      elAlamat.style.display = 'block';
+    } else {
+      elAlamat.style.display = 'none';
+      elAlamat.innerHTML = '';
+    }
+  }
+
   if (p.kd_pj) document.getElementById('formSelectPj').value = p.kd_pj;
   if (p.no_peserta) document.getElementById('formNoPeserta').value = p.no_peserta;
 
@@ -1035,9 +1587,131 @@ function selectPasienItem(p) {
 function clearSelectedPasien() {
   document.getElementById('formNoRm').value = '';
   document.getElementById('formSearchPasien').value = '';
+  const elAlamat = document.getElementById('pillAlamatPasien');
+  if (elAlamat) {
+    elAlamat.style.display = 'none';
+    elAlamat.innerHTML = '';
+  }
   document.getElementById('formSearchPasien').style.display = 'block';
   document.getElementById('formSelectedPasienPill').style.display = 'none';
   document.getElementById('pasienDropdownResults').style.display = 'none';
+}
+
+// ─── Ubah Status (Batal, dll) ────────────────────────────────
+function ubahStatus(noRawat, statusBaru) {
+  const labelMap = { batal: 'membatalkan' };
+  const label = labelMap[statusBaru] || statusBaru;
+  if (!confirm(`Yakin ingin ${label} kunjungan No. Rawat ${noRawat}?`)) return;
+
+  const fd = new FormData();
+  fd.append('action', statusBaru);
+  fd.append('no_rawat', noRawat);
+
+  fetch('<?= BASE_URL ?>modules/pendaftaran/index.php', {
+    method: 'POST',
+    body: fd
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.success) {
+      showToast('Status kunjungan berhasil diperbarui.', 'success');
+      pollLivePendaftaran();
+    } else {
+      showToast(res.message || 'Gagal mengubah status.', 'danger');
+    }
+  })
+  .catch(err => showToast('Terjadi kesalahan jaringan: ' + err, 'danger'));
+}
+
+// ─── Hapus Registrasi Permanen ────────────────────────────────
+function hapusRegistrasi(noRawat, nmPasien) {
+  if (!confirm(`⚠️ HAPUS REGISTRASI PERMANEN\n\nPasien : ${nmPasien}\nNo. Rawat : ${noRawat}\n\nTindakan ini TIDAK DAPAT DIBATALKAN.\nData registrasi dan antrian akan dihapus.\n\nLanjutkan penghapusan?`)) return;
+
+  // Konfirmasi kedua
+  if (!confirm(`Konfirmasi terakhir: hapus registrasi ${noRawat} untuk ${nmPasien}?`)) return;
+
+  const fd = new FormData();
+  fd.append('action', 'hapus_registrasi');
+  fd.append('no_rawat', noRawat);
+
+  fetch('<?= BASE_URL ?>modules/pendaftaran/index.php', {
+    method: 'POST',
+    body: fd
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.success) {
+      showToast(res.message || 'Registrasi berhasil dihapus.', 'success');
+      // Hapus baris dari tabel secara langsung
+      const row = document.getElementById('row-' + noRawat);
+      if (row) {
+        row.style.transition = 'opacity 0.4s, transform 0.4s';
+        row.style.opacity = '0';
+        row.style.transform = 'translateX(30px)';
+        setTimeout(() => { row.remove(); pollLivePendaftaran(); }, 420);
+      } else {
+        pollLivePendaftaran();
+      }
+    } else {
+      showToast(res.message || 'Gagal menghapus registrasi.', 'danger');
+    }
+  })
+  .catch(err => showToast('Terjadi kesalahan jaringan: ' + err, 'danger'));
+}
+
+// ─── Kirim Antrean Manual ke BPJS Sebelum Simpan ───────────────
+function kirimAntreanSebelumSimpan(btn) {
+  const form = document.getElementById('formPendaftaranInline');
+  const noRm = document.getElementById('formNoRm').value;
+  const kdPoli = document.getElementById('formSelectPoli').value;
+  const kdDok = document.getElementById('formSelectDokter').value;
+
+  if (!noRm) {
+    alert('Silakan cari dan pilih data pasien terlebih dahulu!');
+    return;
+  }
+  if (!kdPoli) {
+    alert('Silakan pilih poliklinik tujuan terlebih dahulu!');
+    return;
+  }
+  if (!kdDok) {
+    alert('Silakan pilih dokter terlebih dahulu!');
+    return;
+  }
+
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mengirim ke BPJS...';
+
+  const fd = new FormData(form);
+  fd.set('action', 'kirim_antrean_manual_form');
+
+  fetch('<?= BASE_URL ?>modules/pendaftaran/index.php', {
+    method: 'POST',
+    body: fd
+  })
+  .then(r => r.json())
+  .then(res => {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+
+    if (res.success) {
+      alert(res.message);
+      const badge = document.getElementById('badgeStatusAntreanBpjsForm');
+      const text = document.getElementById('textNoUrutBpjsForm');
+      if (badge && text) {
+        text.innerText = '#' + res.no_urut;
+        badge.style.display = 'inline-flex';
+      }
+    } else {
+      alert(res.message || 'Gagal mengirim antrean ke BPJS.');
+    }
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+    alert('Terjadi kesalahan koneksi: ' + err);
+  });
 }
 
 // ─── Submit Form via AJAX ─────────────────────────────────────
@@ -1548,6 +2222,82 @@ function simpanKirimRujukan(andPrint = false) {
     btn2.disabled = false;
     btn2.innerHTML = '<i class="fas fa-print"></i> Kirim &amp; Cetak Surat Rujukan';
     showToast('Terjadi kesalahan saat memproses rujukan', 'danger');
+  });
+}
+
+function sinkronSemuaPcare() {
+  const icon = document.getElementById('iconSyncPcare');
+  if (icon) icon.className = 'fas fa-rotate fa-spin';
+
+  const formData = new FormData();
+  formData.append('action', 'sinkron_pcare');
+  formData.append('tgl', document.querySelector('input[name="tgl"]')?.value || '<?= $tgl ?>');
+
+  fetch('<?= BASE_URL ?>modules/pendaftaran/index.php', {
+    method: 'POST',
+    body: formData
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (icon) icon.className = 'fas fa-rotate';
+    if (res.success) {
+      showToast(res.message, 'success');
+      pollLivePendaftaran();
+    } else {
+      showToast(res.message || 'Gagal menyinkronkan antrean PCare', 'danger');
+    }
+  })
+  .catch(err => {
+    if (icon) icon.className = 'fas fa-rotate';
+    showToast('Terjadi kesalahan saat menyinkronkan antrean PCare', 'danger');
+  });
+}
+
+function kirimPendaftaranPcareRow(noRawat) {
+  const formData = new FormData();
+  formData.append('action', 'kirim_pendaftaran');
+  formData.append('no_rawat', noRawat);
+
+  fetch('<?= BASE_URL ?>modules/pcare/ajax.php', {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: formData
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.success) {
+      showToast(res.message, 'success');
+      pollLivePendaftaran();
+    } else {
+      showToast(res.message || 'Gagal mendaftarkan pasien ke PCare', 'danger');
+    }
+  })
+  .catch(err => {
+    showToast('Terjadi kesalahan koneksi ke PCare', 'danger');
+  });
+}
+
+function kirimKunjunganPcareRow(noRawat) {
+  const formData = new FormData();
+  formData.append('action', 'kirim_kunjungan');
+  formData.append('no_rawat', noRawat);
+
+  fetch('<?= BASE_URL ?>modules/pcare/ajax.php', {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: formData
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.success) {
+      showToast(res.message, 'success');
+      pollLivePendaftaran();
+    } else {
+      showToast(res.message || 'Gagal mengirim kunjungan ke PCare', 'danger');
+    }
+  })
+  .catch(err => {
+    showToast('Terjadi kesalahan koneksi ke PCare', 'danger');
   });
 }
 </script>

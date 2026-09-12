@@ -130,6 +130,13 @@ $nav_sections = [
       ],
 
       [
+        'module' => 'mapping',
+        'label'  => 'Mapping Bridging',
+        'icon'   => 'fa-shuffle',
+        'color'  => '#0d9488',
+        'url'    => 'mapping/index.php'
+      ],
+      [
         'module' => 'pcare',
         'label'  => 'PCare BPJS',
         'icon'   => 'fa-hospital',

@@ -7,7 +7,7 @@
 if (!isset($active_module)) $active_module = 'dashboard';
 $user = current_user();
 
-$is_bridging_active = in_array($active_module, ['pcare', 'satu_sehat', 'bpjs_emr', 'antrean_bpjs']);
+$is_bridging_active = in_array($active_module, ['mapping', 'pcare', 'satu_sehat', 'bpjs_emr', 'antrean_bpjs']);
 $is_master_active   = in_array($active_module, ['kepegawaian', 'tarif_ralan', 'gudang_obat', 'laporan']);
 $stok_kritis_badge  = function_exists('stat_stok_kritis_count') ? stat_stok_kritis_count() : 0;
 
@@ -273,6 +273,17 @@ $nav_groups = [
           <div style="padding:8px 12px 6px;border-bottom:1px solid #f1f5f9;margin-bottom:4px;">
             <span style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;">Integrasi Eksternal</span>
           </div>
+
+          <!-- 0. Mapping Bridging (PCare & Satu Sehat) -->
+          <a href="<?= BASE_URL ?>modules/mapping/index.php" class="bridging-dropdown-item <?= ($active_module==='mapping')?'active':'' ?>">
+            <div class="bridging-item-icon" style="background:#f0fdfa;color:#0d9488;">
+              <i class="fas fa-shuffle"></i>
+            </div>
+            <div class="bridging-item-text">
+              <span class="bridging-item-title">Mapping Bridging</span>
+              <span class="bridging-item-desc">Pemadanan Dokter, Poli, Obat &amp; LOINC (PCare + Satu Sehat)</span>
+            </div>
+          </a>
 
           <!-- 1. PCare BPJS -->
           <a href="<?= BASE_URL ?>modules/pcare/index.php" class="bridging-dropdown-item <?= ($active_module==='pcare')?'active':'' ?>">

@@ -209,6 +209,7 @@ switch ($action) {
             'respRate'           => (int)($data['respirasi'] ?: 20),
             'heartRate'          => (int)($data['nadi'] ?: 80),
             'lingkarPerut'       => (int)($data['lingkar_perut'] ?: 80),
+            'rujukBalik'         => '0',
             'kdTkp'              => '10' // 10 = Rawat Jalan Tingkat Pertama
         ];
 
@@ -464,6 +465,7 @@ switch ($action) {
                         'respRate'           => (int)($data['respirasi'] ?: 20),
                         'heartRate'          => (int)($data['nadi'] ?: 80),
                         'lingkarPerut'       => (int)($data['lingkar_perut'] ?: 80),
+                        'rujukBalik'         => '0',
                         'kdTkp'              => '10'
                     ];
 

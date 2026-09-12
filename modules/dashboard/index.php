@@ -202,6 +202,12 @@ include dirname(__DIR__, 2) . '/includes/header.php';
                         <div style="font-size:11px;color:var(--gray-400);">
                           <?= icon_jk($k['jk']) ?> &nbsp;<?= hitung_umur($k['tgl_lahir']) ?>
                         </div>
+                        <?php if (!empty($k['alamat'])): ?>
+                          <div style="font-size:11px;color:var(--gray-500);margin-top:2px;display:flex;align-items:center;gap:4px;">
+                            <i class="fas fa-map-marker-alt" style="color:#0891b2;font-size:9.5px;flex-shrink:0;"></i>
+                            <span style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="<?= htmlspecialchars($k['alamat']) ?>"><?= htmlspecialchars($k['alamat']) ?></span>
+                          </div>
+                        <?php endif; ?>
                       </div>
                     </div>
                   </td>

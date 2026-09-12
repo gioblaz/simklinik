@@ -108,7 +108,7 @@ function get_kunjungan_hari_ini(int $limit = 10): array {
     $result = $conn->query("
         SELECT r.no_rawat, r.no_reg, r.tgl_registrasi, r.jam_reg,
                r.stts, r.status_lanjut,
-               p.nm_pasien, p.no_rkm_medis, p.jk, p.tgl_lahir,
+               p.nm_pasien, p.no_rkm_medis, p.jk, p.tgl_lahir, p.alamat,
                d.nm_dokter, pol.nm_poli
         FROM reg_periksa r
         JOIN pasien p ON r.no_rkm_medis = p.no_rkm_medis
@@ -389,5 +389,16 @@ function is_diagnosa_tacc(string $kd_penyakit): bool {
     return in_array($prefix3, $tacc_prefixes);
 }
 
+/**
+ * Escape string untuk HTML output (aman dari null di PHP 8.1+)
+ */
+function h_esc(?string $str): string {
+    return htmlspecialchars((string)($str ?? ''), ENT_QUOTES, 'UTF-8');
+}
 
-
+/**
+ * Escape string untuk Javascript onclick attribute (aman dari null di PHP 8.1+)
+ */
+function js_esc(?string $str): string {
+    return htmlspecialchars(addslashes((string)($str ?? '')), ENT_QUOTES, 'UTF-8');
+}
