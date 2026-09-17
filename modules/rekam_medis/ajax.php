@@ -869,6 +869,664 @@ switch ($action) {
         }
         break;
 
+    // ═════════════════════════════════════════════════════════════
+    // ─── MODUL ODONTOGRAM (POLI GIGI & MULUT) ─────────────────────
+    // ═════════════════════════════════════════════════════════════
+
+    case 'get_odontogram':
+        $no_rawat     = $conn->real_escape_string(sanitize($_GET['no_rawat'] ?? ''));
+        $no_rkm_medis = $conn->real_escape_string(sanitize($_GET['no_rkm_medis'] ?? ''));
+
+        if (empty($no_rawat) && empty($no_rkm_medis)) {
+            echo json_encode(['success' => false, 'message' => 'Parameter tidak lengkap']);
+            exit;
+        }
+
+        // Cari header odontogram terkini (utamakan no_rawat sekarang, jika belum ada cari kunjungan terakhir)
+        $header = null;
+        if (!empty($no_rawat)) {
+            $qH = $conn->query("SELECT * FROM mlite_odontogram WHERE no_rawat = '$no_rawat' LIMIT 1");
+            if ($qH && $qH->num_rows > 0) {
+                $header = $qH->fetch_assoc();
+            }
+        }
+        if (!$header && !empty($no_rkm_medis)) {
+            $qH = $conn->query("SELECT * FROM mlite_odontogram WHERE no_rkm_medis = '$no_rkm_medis' ORDER BY tgl_perawatan DESC, jam_rawat DESC LIMIT 1");
+            if ($qH && $qH->num_rows > 0) {
+                $header = $qH->fetch_assoc();
+                $header['is_previous'] = true;
+            }
+        }
+
+        // Ambil detail gigi terkini (kumulatif atau per no_rawat / no_rkm_medis)
+        $teeth = [];
+        $teeth_sql = !empty($no_rawat) && $header && empty($header['is_previous'])
+            ? "SELECT * FROM mlite_odontogram_detail WHERE no_rawat = '$no_rawat'"
+            : "SELECT * FROM mlite_odontogram_detail WHERE no_rkm_medis = '$no_rkm_medis' ORDER BY created_at ASC";
+        
+        $qT = $conn->query($teeth_sql);
+        if ($qT) {
+            while ($row = $qT->fetch_assoc()) {
+                // Key format: no_gigi_posisi
+                $k = $row['no_gigi'] . '_' . $row['posisi'];
+                $teeth[$k] = $row;
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'header'  => $header,
+            'teeth'   => $teeth
+        ]);
+        break;
+
+    case 'simpan_odontogram':
+        $no_rawat            = $conn->real_escape_string(sanitize($_POST['no_rawat'] ?? ''));
+        $no_rkm_medis        = $conn->real_escape_string(sanitize($_POST['no_rkm_medis'] ?? ''));
+        $nip                 = $conn->real_escape_string(sanitize($_POST['nip'] ?? ($_SESSION['username'] ?? '-')));
+        $oklusi              = $conn->real_escape_string(sanitize($_POST['oklusi'] ?? 'Normal'));
+        $torus_palatinus     = $conn->real_escape_string(sanitize($_POST['torus_palatinus'] ?? 'Tidak Ada'));
+        $torus_mandibularis  = $conn->real_escape_string(sanitize($_POST['torus_mandibularis'] ?? 'Tidak Ada'));
+        $palatum             = $conn->real_escape_string(sanitize($_POST['palatum'] ?? 'Sedang'));
+        $diastema            = $conn->real_escape_string(sanitize($_POST['diastema'] ?? 'Tidak Ada'));
+        $gigi_anomali        = $conn->real_escape_string(sanitize($_POST['gigi_anomali'] ?? 'Tidak Ada'));
+        $lain_lain           = $conn->real_escape_string(sanitize($_POST['lain_lain'] ?? ''));
+        $ohis_debris         = $conn->real_escape_string(sanitize($_POST['ohis_debris'] ?? '0'));
+        $ohis_calculus       = $conn->real_escape_string(sanitize($_POST['ohis_calculus'] ?? '0'));
+        $ohis_nilai          = $conn->real_escape_string(sanitize($_POST['ohis_nilai'] ?? '0'));
+        $ohis_kriteria       = $conn->real_escape_string(sanitize($_POST['ohis_kriteria'] ?? 'Baik'));
+        $d_val               = (int)($_POST['d_val'] ?? 0);
+        $m_val               = (int)($_POST['m_val'] ?? 0);
+        $f_val               = (int)($_POST['f_val'] ?? 0);
+        $dmft_val            = (int)($_POST['dmft_val'] ?? 0);
+        $tgl_perawatan       = date('Y-m-d');
+        $jam_rawat           = date('H:i:s');
+
+        if (empty($no_rawat) || empty($no_rkm_medis)) {
+            echo json_encode(['success' => false, 'message' => 'Nomor rawat & RM wajib ada']);
+            exit;
+        }
+
+        // Cek apakah header sudah ada
+        $checkH = $conn->query("SELECT id FROM mlite_odontogram WHERE no_rawat = '$no_rawat' LIMIT 1");
+        $id_odontogram = 0;
+        if ($checkH && $checkH->num_rows > 0) {
+            $id_odontogram = (int)$checkH->fetch_assoc()['id'];
+            $conn->query("
+                UPDATE mlite_odontogram SET
+                    oklusi = '$oklusi',
+                    torus_palatinus = '$torus_palatinus',
+                    torus_mandibularis = '$torus_mandibularis',
+                    palatum = '$palatum',
+                    diastema = '$diastema',
+                    gigi_anomali = '$gigi_anomali',
+                    lain_lain = '$lain_lain',
+                    ohis_debris = '$ohis_debris',
+                    ohis_calculus = '$ohis_calculus',
+                    ohis_nilai = '$ohis_nilai',
+                    ohis_kriteria = '$ohis_kriteria',
+                    d_val = $d_val,
+                    m_val = $m_val,
+                    f_val = $f_val,
+                    dmft_val = $dmft_val,
+                    nip = '$nip'
+                WHERE id = $id_odontogram
+            ");
+        } else {
+            $conn->query("
+                INSERT INTO mlite_odontogram (
+                    no_rawat, no_rkm_medis, tgl_perawatan, jam_rawat,
+                    oklusi, torus_palatinus, torus_mandibularis, palatum, diastema, gigi_anomali,
+                    lain_lain, ohis_debris, ohis_calculus, ohis_nilai, ohis_kriteria,
+                    d_val, m_val, f_val, dmft_val, nip
+                ) VALUES (
+                    '$no_rawat', '$no_rkm_medis', '$tgl_perawatan', '$jam_rawat',
+                    '$oklusi', '$torus_palatinus', '$torus_mandibularis', '$palatum', '$diastema', '$gigi_anomali',
+                    '$lain_lain', '$ohis_debris', '$ohis_calculus', '$ohis_nilai', '$ohis_kriteria',
+                    $d_val, $m_val, $f_val, $dmft_val, '$nip'
+                )
+            ");
+            $id_odontogram = (int)$conn->insert_id;
+        }
+
+        // Simpan / update teeth array jika dikirim
+        $teeth_raw = $_POST['teeth_data'] ?? '';
+        if (!empty($teeth_raw)) {
+            $teeth_list = is_array($teeth_raw) ? $teeth_raw : json_decode($teeth_raw, true);
+            if (is_array($teeth_list)) {
+                // Bersihkan data kunjungan ini dahulu
+                $conn->query("DELETE FROM mlite_odontogram_detail WHERE no_rawat = '$no_rawat'");
+                foreach ($teeth_list as $t) {
+                    $no_gigi   = $conn->real_escape_string(sanitize($t['no_gigi'] ?? ''));
+                    $posisi    = $conn->real_escape_string(sanitize($t['posisi'] ?? 'ALL'));
+                    $kondisi   = $conn->real_escape_string(sanitize($t['kondisi'] ?? 'Sou'));
+                    $ket       = $conn->real_escape_string(sanitize($t['keterangan'] ?? ''));
+                    if (!empty($no_gigi)) {
+                        $conn->query("
+                            INSERT INTO mlite_odontogram_detail (
+                                id_odontogram, no_rawat, no_rkm_medis, no_gigi, posisi, kondisi, keterangan
+                            ) VALUES (
+                                $id_odontogram, '$no_rawat', '$no_rkm_medis', '$no_gigi', '$posisi', '$kondisi', '$ket'
+                            )
+                        ");
+                    }
+                }
+            }
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Data odontogram berhasil disimpan', 'id' => $id_odontogram]);
+        break;
+
+    case 'simpan_gigi_single':
+        $no_rawat     = $conn->real_escape_string(sanitize($_POST['no_rawat'] ?? ''));
+        $no_rkm_medis = $conn->real_escape_string(sanitize($_POST['no_rkm_medis'] ?? ''));
+        $no_gigi      = $conn->real_escape_string(sanitize($_POST['no_gigi'] ?? ''));
+        $posisi       = $conn->real_escape_string(sanitize($_POST['posisi'] ?? 'ALL'));
+        $kondisi      = $conn->real_escape_string(sanitize($_POST['kondisi'] ?? 'Sou'));
+        $keterangan   = $conn->real_escape_string(sanitize($_POST['keterangan'] ?? ''));
+
+        if (empty($no_rawat) || empty($no_gigi)) {
+            echo json_encode(['success' => false, 'message' => 'Data tidak lengkap']);
+            exit;
+        }
+
+        // Hapus kondisi permukaan spesifik pada kunjungan ini
+        $conn->query("DELETE FROM mlite_odontogram_detail WHERE no_rawat = '$no_rawat' AND no_gigi = '$no_gigi' AND posisi = '$posisi'");
+        
+        if ($kondisi !== 'Sou') {
+            $conn->query("
+                INSERT INTO mlite_odontogram_detail (
+                    id_odontogram, no_rawat, no_rkm_medis, no_gigi, posisi, kondisi, keterangan
+                ) VALUES (
+                    0, '$no_rawat', '$no_rkm_medis', '$no_gigi', '$posisi', '$kondisi', '$keterangan'
+                )
+            ");
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Status gigi diperbarui']);
+        break;
+
+    case 'get_odontogram_riwayat':
+        $no_rkm_medis = $conn->real_escape_string(sanitize($_GET['no_rkm_medis'] ?? ''));
+        $q = $conn->query("
+            SELECT o.*, d.nm_dokter
+            FROM mlite_odontogram o
+            LEFT JOIN reg_periksa r ON o.no_rawat = r.no_rawat
+            LEFT JOIN dokter d ON r.kd_dokter = d.kd_dokter
+            WHERE o.no_rkm_medis = '$no_rkm_medis'
+            ORDER BY o.tgl_perawatan DESC, o.jam_rawat DESC
+        ");
+        $list = [];
+        if ($q) {
+            while ($row = $q->fetch_assoc()) $list[] = $row;
+        }
+        echo json_encode(['success' => true, 'data' => $list]);
+        break;
+
+    // ═════════════════════════════════════════════════════════════
+    // ─── MODUL KIA (ANC KEBIDANAN, KMS & IMUNISASI ANAK, KB) ─────
+    // ═════════════════════════════════════════════════════════════
+
+    // ── ANC (Antenatal Care Ibu Hamil) ──
+    case 'get_kia_anc':
+        $no_rawat     = $conn->real_escape_string(sanitize($_GET['no_rawat'] ?? ''));
+        $no_rkm_medis = $conn->real_escape_string(sanitize($_GET['no_rkm_medis'] ?? ''));
+
+        $anc = null;
+        if (!empty($no_rawat)) {
+            $q = $conn->query("SELECT * FROM mlite_kia_anc WHERE no_rawat = '$no_rawat' LIMIT 1");
+            if ($q && $q->num_rows > 0) $anc = $q->fetch_assoc();
+        }
+
+        // Riwayat ANC sebelumnya untuk ibu ini
+        $history = [];
+        if (!empty($no_rkm_medis)) {
+            $qH = $conn->query("
+                SELECT ka.*, d.nm_dokter
+                FROM mlite_kia_anc ka
+                LEFT JOIN reg_periksa r ON ka.no_rawat = r.no_rawat
+                LEFT JOIN dokter d ON r.kd_dokter = d.kd_dokter
+                WHERE ka.no_rkm_medis = '$no_rkm_medis'
+                ORDER BY ka.tgl_perawatan DESC, ka.jam_rawat DESC
+            ");
+            if ($qH) {
+                while ($h = $qH->fetch_assoc()) $history[] = $h;
+            }
+        }
+
+        echo json_encode(['success' => true, 'data' => $anc, 'history' => $history]);
+        break;
+
+    case 'simpan_kia_anc':
+        $no_rawat          = $conn->real_escape_string(sanitize($_POST['no_rawat'] ?? ''));
+        $no_rkm_medis      = $conn->real_escape_string(sanitize($_POST['no_rkm_medis'] ?? ''));
+        $nip               = $conn->real_escape_string(sanitize($_POST['nip'] ?? ($_SESSION['username'] ?? '-')));
+        $g_hamil           = (int)($_POST['g_hamil'] ?? 1);
+        $p_partus          = (int)($_POST['p_partus'] ?? 0);
+        $a_abortus         = (int)($_POST['a_abortus'] ?? 0);
+        $h_hidup           = (int)($_POST['h_hidup'] ?? 0);
+        $hpht              = !empty($_POST['hpht']) ? "'" . $conn->real_escape_string(sanitize($_POST['hpht'])) . "'" : "NULL";
+        $hpl               = !empty($_POST['hpl']) ? "'" . $conn->real_escape_string(sanitize($_POST['hpl'])) . "'" : "NULL";
+        $usia_kehamilan    = $conn->real_escape_string(sanitize($_POST['usia_kehamilan'] ?? ''));
+        $tfu               = $conn->real_escape_string(sanitize($_POST['tfu'] ?? ''));
+        $djj               = $conn->real_escape_string(sanitize($_POST['djj'] ?? ''));
+        $letak_janin       = $conn->real_escape_string(sanitize($_POST['letak_janin'] ?? 'Kepala'));
+        $leopold_1         = $conn->real_escape_string(sanitize($_POST['leopold_1'] ?? ''));
+        $leopold_2         = $conn->real_escape_string(sanitize($_POST['leopold_2'] ?? ''));
+        $leopold_3         = $conn->real_escape_string(sanitize($_POST['leopold_3'] ?? ''));
+        $leopold_4         = $conn->real_escape_string(sanitize($_POST['leopold_4'] ?? ''));
+        $edema             = $conn->real_escape_string(sanitize($_POST['edema'] ?? 'Tidak'));
+        $refl_patella      = $conn->real_escape_string(sanitize($_POST['refl_patella'] ?? '+'));
+        $skor_kspr         = (int)($_POST['skor_kspr'] ?? 2);
+        $resiko_kehamilan  = $conn->real_escape_string(sanitize($_POST['resiko_kehamilan'] ?? 'KRR (Rendah)'));
+        $tindakan_kia      = $conn->real_escape_string(sanitize($_POST['tindakan_kia'] ?? ''));
+        $saran_nasehat     = $conn->real_escape_string(sanitize($_POST['saran_nasehat'] ?? ''));
+        $tgl_perawatan     = date('Y-m-d');
+        $jam_rawat         = date('H:i:s');
+
+        if (empty($no_rawat) || empty($no_rkm_medis)) {
+            echo json_encode(['success' => false, 'message' => 'No rawat dan RM wajib ada']);
+            exit;
+        }
+
+        $check = $conn->query("SELECT id FROM mlite_kia_anc WHERE no_rawat = '$no_rawat' LIMIT 1");
+        if ($check && $check->num_rows > 0) {
+            $id = (int)$check->fetch_assoc()['id'];
+            $conn->query("
+                UPDATE mlite_kia_anc SET
+                    g_hamil = $g_hamil, p_partus = $p_partus, a_abortus = $a_abortus, h_hidup = $h_hidup,
+                    hpht = $hpht, hpl = $hpl, usia_kehamilan = '$usia_kehamilan',
+                    tfu = '$tfu', djj = '$djj', letak_janin = '$letak_janin',
+                    leopold_1 = '$leopold_1', leopold_2 = '$leopold_2', leopold_3 = '$leopold_3', leopold_4 = '$leopold_4',
+                    edema = '$edema', refl_patella = '$refl_patella', skor_kspr = $skor_kspr, resiko_kehamilan = '$resiko_kehamilan',
+                    tindakan_kia = '$tindakan_kia', saran_nasehat = '$saran_nasehat', nip = '$nip'
+                WHERE id = $id
+            ");
+        } else {
+            $conn->query("
+                INSERT INTO mlite_kia_anc (
+                    no_rawat, no_rkm_medis, tgl_perawatan, jam_rawat,
+                    g_hamil, p_partus, a_abortus, h_hidup,
+                    hpht, hpl, usia_kehamilan, tfu, djj, letak_janin,
+                    leopold_1, leopold_2, leopold_3, leopold_4,
+                    edema, refl_patella, skor_kspr, resiko_kehamilan,
+                    tindakan_kia, saran_nasehat, nip
+                ) VALUES (
+                    '$no_rawat', '$no_rkm_medis', '$tgl_perawatan', '$jam_rawat',
+                    $g_hamil, $p_partus, $a_abortus, $h_hidup,
+                    $hpht, $hpl, '$usia_kehamilan', '$tfu', '$djj', '$letak_janin',
+                    '$leopold_1', '$leopold_2', '$leopold_3', '$leopold_4',
+                    '$edema', '$refl_patella', $skor_kspr, '$resiko_kehamilan',
+                    '$tindakan_kia', '$saran_nasehat', '$nip'
+                )
+            ");
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Pemeriksaan ANC Kehamilan berhasil disimpan']);
+        break;
+
+    // ── KMS & Tumbuh Kembang Anak ──
+    case 'get_kia_kms':
+        $no_rawat     = $conn->real_escape_string(sanitize($_GET['no_rawat'] ?? ''));
+        $no_rkm_medis = $conn->real_escape_string(sanitize($_GET['no_rkm_medis'] ?? ''));
+
+        $kms = null;
+        if (!empty($no_rawat)) {
+            $q = $conn->query("SELECT * FROM mlite_kia_kms WHERE no_rawat = '$no_rawat' LIMIT 1");
+            if ($q && $q->num_rows > 0) $kms = $q->fetch_assoc();
+        }
+
+        // Riwayat grafik tumbuh kembang anak
+        $chart_data = [];
+        if (!empty($no_rkm_medis)) {
+            $qC = $conn->query("
+                SELECT tgl_perawatan, umur_bln, bb, tb, lk, lila, status_gizi_bb_u
+                FROM mlite_kia_kms
+                WHERE no_rkm_medis = '$no_rkm_medis'
+                ORDER BY tgl_perawatan ASC
+            ");
+            if ($qC) {
+                while ($c = $qC->fetch_assoc()) $chart_data[] = $c;
+            }
+        }
+
+        echo json_encode(['success' => true, 'data' => $kms, 'chart_data' => $chart_data]);
+        break;
+
+    case 'simpan_kia_kms':
+        $no_rawat              = $conn->real_escape_string(sanitize($_POST['no_rawat'] ?? ''));
+        $no_rkm_medis          = $conn->real_escape_string(sanitize($_POST['no_rkm_medis'] ?? ''));
+        $nip                   = $conn->real_escape_string(sanitize($_POST['nip'] ?? ($_SESSION['username'] ?? '-')));
+        $umur_bln              = (int)($_POST['umur_bln'] ?? 0);
+        $bb                    = $conn->real_escape_string(sanitize($_POST['bb'] ?? ''));
+        $tb                    = $conn->real_escape_string(sanitize($_POST['tb'] ?? ''));
+        $lk                    = $conn->real_escape_string(sanitize($_POST['lk'] ?? ''));
+        $lila                  = $conn->real_escape_string(sanitize($_POST['lila'] ?? ''));
+        $status_gizi_bb_u      = $conn->real_escape_string(sanitize($_POST['status_gizi_bb_u'] ?? ''));
+        $status_gizi_tb_u      = $conn->real_escape_string(sanitize($_POST['status_gizi_tb_u'] ?? ''));
+        $status_gizi_bb_tb     = $conn->real_escape_string(sanitize($_POST['status_gizi_bb_tb'] ?? ''));
+        $asi_eksklusif         = $conn->real_escape_string(sanitize($_POST['asi_eksklusif'] ?? 'Ya'));
+        $vit_a                 = $conn->real_escape_string(sanitize($_POST['vit_a'] ?? 'Tidak'));
+        $obat_cacing           = $conn->real_escape_string(sanitize($_POST['obat_cacing'] ?? 'Tidak'));
+        $perkembangan_motorik  = $conn->real_escape_string(sanitize($_POST['perkembangan_motorik'] ?? ''));
+        $catatan               = $conn->real_escape_string(sanitize($_POST['catatan'] ?? ''));
+        $tgl_perawatan         = date('Y-m-d');
+        $jam_rawat             = date('H:i:s');
+
+        if (empty($no_rawat) || empty($no_rkm_medis)) {
+            echo json_encode(['success' => false, 'message' => 'No rawat dan RM wajib ada']);
+            exit;
+        }
+
+        $check = $conn->query("SELECT id FROM mlite_kia_kms WHERE no_rawat = '$no_rawat' LIMIT 1");
+        if ($check && $check->num_rows > 0) {
+            $id = (int)$check->fetch_assoc()['id'];
+            $conn->query("
+                UPDATE mlite_kia_kms SET
+                    umur_bln = $umur_bln, bb = '$bb', tb = '$tb', lk = '$lk', lila = '$lila',
+                    status_gizi_bb_u = '$status_gizi_bb_u', status_gizi_tb_u = '$status_gizi_tb_u', status_gizi_bb_tb = '$status_gizi_bb_tb',
+                    asi_eksklusif = '$asi_eksklusif', vit_a = '$vit_a', obat_cacing = '$obat_cacing',
+                    perkembangan_motorik = '$perkembangan_motorik', catatan = '$catatan', nip = '$nip'
+                WHERE id = $id
+            ");
+        } else {
+            $conn->query("
+                INSERT INTO mlite_kia_kms (
+                    no_rawat, no_rkm_medis, tgl_perawatan, jam_rawat,
+                    umur_bln, bb, tb, lk, lila,
+                    status_gizi_bb_u, status_gizi_tb_u, status_gizi_bb_tb,
+                    asi_eksklusif, vit_a, obat_cacing, perkembangan_motorik, catatan, nip
+                ) VALUES (
+                    '$no_rawat', '$no_rkm_medis', '$tgl_perawatan', '$jam_rawat',
+                    $umur_bln, '$bb', '$tb', '$lk', '$lila',
+                    '$status_gizi_bb_u', '$status_gizi_tb_u', '$status_gizi_bb_tb',
+                    '$asi_eksklusif', '$vit_a', '$obat_cacing', '$perkembangan_motorik', '$catatan', '$nip'
+                )
+            ");
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Data KMS & Antropometri berhasil disimpan']);
+        break;
+
+    // ── Imunisasi Anak ──
+    case 'get_kia_imunisasi':
+        $no_rkm_medis = $conn->real_escape_string(sanitize($_GET['no_rkm_medis'] ?? ''));
+        $q = $conn->query("
+            SELECT ki.*, COALESCE(pg.nama, pt.nama, d.nm_dokter, ki.nip) as nama_petugas
+            FROM mlite_kia_imunisasi ki
+            LEFT JOIN pegawai pg ON ki.nip = pg.nik
+            LEFT JOIN petugas pt ON ki.nip = pt.nip
+            LEFT JOIN dokter d ON ki.nip = d.kd_dokter
+            WHERE ki.no_rkm_medis = '$no_rkm_medis'
+            ORDER BY ki.tgl_imunisasi ASC, ki.id ASC
+        ");
+        $data = [];
+        if ($q) {
+            while ($r = $q->fetch_assoc()) $data[] = $r;
+        }
+        echo json_encode(['success' => true, 'data' => $data]);
+        break;
+
+    case 'simpan_kia_imunisasi':
+        $no_rawat        = $conn->real_escape_string(sanitize($_POST['no_rawat'] ?? ''));
+        $no_rkm_medis    = $conn->real_escape_string(sanitize($_POST['no_rkm_medis'] ?? ''));
+        $nip             = $conn->real_escape_string(sanitize($_POST['nip'] ?? ($_SESSION['username'] ?? '-')));
+        $tgl_imunisasi   = $conn->real_escape_string(sanitize($_POST['tgl_imunisasi'] ?? date('Y-m-d')));
+        $jenis_imunisasi = $conn->real_escape_string(sanitize($_POST['jenis_imunisasi'] ?? ''));
+        $no_batch        = $conn->real_escape_string(sanitize($_POST['no_batch'] ?? ''));
+        $keterangan      = $conn->real_escape_string(sanitize($_POST['keterangan'] ?? ''));
+
+        if (empty($no_rkm_medis) || empty($jenis_imunisasi)) {
+            echo json_encode(['success' => false, 'message' => 'Jenis imunisasi wajib dipilih']);
+            exit;
+        }
+
+        $conn->query("
+            INSERT INTO mlite_kia_imunisasi (
+                no_rawat, no_rkm_medis, tgl_imunisasi, jenis_imunisasi, no_batch, nip, keterangan
+            ) VALUES (
+                '$no_rawat', '$no_rkm_medis', '$tgl_imunisasi', '$jenis_imunisasi', '$no_batch', '$nip', '$keterangan'
+            )
+        ");
+
+        echo json_encode(['success' => true, 'message' => 'Imunisasi berhasil ditambahkan']);
+        break;
+
+    case 'hapus_kia_imunisasi':
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id > 0) {
+            $conn->query("DELETE FROM mlite_kia_imunisasi WHERE id = $id");
+            echo json_encode(['success' => true, 'message' => 'Data imunisasi berhasil dihapus']);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'ID tidak valid']);
+        }
+        break;
+
+    // ── Pelayanan KB ──
+    case 'get_kia_kb':
+        $no_rkm_medis = $conn->real_escape_string(sanitize($_GET['no_rkm_medis'] ?? ''));
+        $q = $conn->query("
+            SELECT kb.*, COALESCE(pg.nama, pt.nama, d.nm_dokter, kb.nip) as nama_petugas
+            FROM mlite_kia_kb kb
+            LEFT JOIN pegawai pg ON kb.nip = pg.nik
+            LEFT JOIN petugas pt ON kb.nip = pt.nip
+            LEFT JOIN dokter d ON kb.nip = d.kd_dokter
+            WHERE kb.no_rkm_medis = '$no_rkm_medis'
+            ORDER BY kb.tgl_pelayanan DESC
+        ");
+        $data = [];
+        if ($q) {
+            while ($r = $q->fetch_assoc()) $data[] = $r;
+        }
+        echo json_encode(['success' => true, 'data' => $data]);
+        break;
+
+    case 'simpan_kia_kb':
+        $no_rawat          = $conn->real_escape_string(sanitize($_POST['no_rawat'] ?? ''));
+        $no_rkm_medis      = $conn->real_escape_string(sanitize($_POST['no_rkm_medis'] ?? ''));
+        $nip               = $conn->real_escape_string(sanitize($_POST['nip'] ?? ($_SESSION['username'] ?? '-')));
+        $tgl_pelayanan     = $conn->real_escape_string(sanitize($_POST['tgl_pelayanan'] ?? date('Y-m-d')));
+        $jenis_kontrasepsi = $conn->real_escape_string(sanitize($_POST['jenis_kontrasepsi'] ?? ''));
+        $tgl_kembali       = !empty($_POST['tgl_kembali']) ? "'" . $conn->real_escape_string(sanitize($_POST['tgl_kembali'])) . "'" : "NULL";
+        $keluhan           = $conn->real_escape_string(sanitize($_POST['keluhan'] ?? ''));
+        $efek_samping      = $conn->real_escape_string(sanitize($_POST['efek_samping'] ?? ''));
+
+        if (empty($no_rkm_medis) || empty($jenis_kontrasepsi)) {
+            echo json_encode(['success' => false, 'message' => 'Jenis kontrasepsi wajib diisi']);
+            exit;
+        }
+
+        $conn->query("
+            INSERT INTO mlite_kia_kb (
+                no_rawat, no_rkm_medis, tgl_pelayanan, jenis_kontrasepsi, tgl_kembali, keluhan, efek_samping, nip
+            ) VALUES (
+                '$no_rawat', '$no_rkm_medis', '$tgl_pelayanan', '$jenis_kontrasepsi', $tgl_kembali, '$keluhan', '$efek_samping', '$nip'
+            )
+        ");
+
+        echo json_encode(['success' => true, 'message' => 'Pelayanan KB berhasil dicatat']);
+        break;
+
+    // ─── General Consent (Persetujuan Umum) ────────────────────
+    case 'get_general_consent':
+        $no_rawat = $conn->real_escape_string(sanitize($_GET['no_rawat'] ?? ''));
+        if (empty($no_rawat)) {
+            echo json_encode(['success' => false, 'message' => 'No. Rawat wajib diisi']);
+            exit;
+        }
+
+        // Ambil data pasien & registrasi
+        $res_pasien = $conn->query("
+            SELECT r.no_rawat, r.no_rkm_medis, r.tgl_registrasi, r.jam_reg, r.kd_pj,
+                   p.nm_pasien, p.jk, p.tgl_lahir, p.no_ktp, p.no_tlp, p.alamat,
+                   p.namakeluarga, p.alamatpj, p.keluarga,
+                   d.nm_dokter, pol.nm_poli, pj.png_jawab as nm_penjab
+            FROM reg_periksa r
+            JOIN pasien p ON r.no_rkm_medis = p.no_rkm_medis
+            LEFT JOIN dokter d ON r.kd_dokter = d.kd_dokter
+            LEFT JOIN poliklinik pol ON r.kd_poli = pol.kd_poli
+            LEFT JOIN penjab pj ON r.kd_pj = pj.kd_pj
+            WHERE r.no_rawat = '$no_rawat'
+            LIMIT 1
+        ");
+
+        if (!$res_pasien || $res_pasien->num_rows === 0) {
+            echo json_encode(['success' => false, 'message' => 'Data kunjungan tidak ditemukan']);
+            exit;
+        }
+        $pasien_data = $res_pasien->fetch_assoc();
+        $pasien_data['umur'] = hitung_umur($pasien_data['tgl_lahir']);
+
+        // Ambil data persetujuan jika sudah ada
+        $res_gc = $conn->query("SELECT * FROM surat_persetujuan_umum WHERE no_rawat = '$no_rawat' LIMIT 1");
+        $gc_data = ($res_gc && $res_gc->num_rows > 0) ? $res_gc->fetch_assoc() : null;
+
+        echo json_encode([
+            'success' => true,
+            'pasien'  => $pasien_data,
+            'consent' => $gc_data,
+            'petugas_default' => [
+                'nama' => $_SESSION['nama'] ?? $_SESSION['username'] ?? 'Petugas Admisi',
+                'nip'  => $_SESSION['user_id'] ?? $_SESSION['username'] ?? '-'
+            ]
+        ]);
+        break;
+
+    case 'simpan_general_consent':
+        $no_rawat = $conn->real_escape_string(sanitize($_POST['no_rawat'] ?? ''));
+        if (empty($no_rawat)) {
+            echo json_encode(['success' => false, 'message' => 'No. Rawat wajib diisi']);
+            exit;
+        }
+
+        $no_surat               = $conn->real_escape_string(sanitize($_POST['no_surat'] ?? ''));
+        $tgl_persetujuan        = $conn->real_escape_string(sanitize($_POST['tgl_persetujuan'] ?? date('Y-m-d')));
+        $jam_persetujuan        = $conn->real_escape_string(sanitize($_POST['jam_persetujuan'] ?? date('H:i:s')));
+        $nama_pj                = $conn->real_escape_string(sanitize($_POST['nama_pj'] ?? ''));
+        $hubungan_pj            = $conn->real_escape_string(sanitize($_POST['hubungan_pj'] ?? 'Diri Sendiri'));
+        $jk_pj                  = $conn->real_escape_string(sanitize($_POST['jk_pj'] ?? 'L'));
+        $tgl_lahir_pj           = !empty($_POST['tgl_lahir_pj']) ? "'" . $conn->real_escape_string(sanitize($_POST['tgl_lahir_pj'])) . "'" : "NULL";
+        $umur_pj                = $conn->real_escape_string(sanitize($_POST['umur_pj'] ?? ''));
+        $alamat_pj              = $conn->real_escape_string(sanitize($_POST['alamat_pj'] ?? ''));
+        $no_ktp_pj              = $conn->real_escape_string(sanitize($_POST['no_ktp_pj'] ?? ''));
+        $no_telp_pj             = $conn->real_escape_string(sanitize($_POST['no_telp_pj'] ?? ''));
+        
+        $setuju_rawat_inap_jalan   = $conn->real_escape_string(sanitize($_POST['setuju_rawat_inap_jalan'] ?? 'Setuju'));
+        $setuju_pelepasan_informasi= $conn->real_escape_string(sanitize($_POST['setuju_pelepasan_informasi'] ?? 'Setuju'));
+        $nama_keluarga_informasi   = $conn->real_escape_string(sanitize($_POST['nama_keluarga_informasi'] ?? ''));
+        $setuju_hak_kewajiban      = $conn->real_escape_string(sanitize($_POST['setuju_hak_kewajiban'] ?? 'Setuju'));
+        $setuju_privasi_khusus     = $conn->real_escape_string(sanitize($_POST['setuju_privasi_khusus'] ?? 'Tidak Ada'));
+        $detail_privasi_khusus     = $conn->real_escape_string(sanitize($_POST['detail_privasi_khusus'] ?? ''));
+        $setuju_barang_pribadi     = $conn->real_escape_string(sanitize($_POST['setuju_barang_pribadi'] ?? 'Setuju'));
+        $setuju_pembayaran         = $conn->real_escape_string(sanitize($_POST['setuju_pembayaran'] ?? 'Setuju'));
+        $tipe_penjamin             = $conn->real_escape_string(sanitize($_POST['tipe_penjamin'] ?? 'Umum'));
+        $keterangan_lain           = $conn->real_escape_string(sanitize($_POST['keterangan_lain'] ?? ''));
+        $nip_petugas               = $conn->real_escape_string(sanitize($_POST['nip_petugas'] ?? ($_SESSION['user_id'] ?? '-')));
+        $nama_petugas              = $conn->real_escape_string(sanitize($_POST['nama_petugas'] ?? ($_SESSION['nama'] ?? 'Petugas Admisi')));
+
+        // Digital Signatures (Base64 data url from canvas)
+        $ttd_pasien_raw            = $_POST['ttd_pasien'] ?? '';
+        $ttd_petugas_raw           = $_POST['ttd_petugas'] ?? '';
+        
+        // Sanitize / escape base64 string directly into MySQL
+        $ttd_pasien                = $conn->real_escape_string($ttd_pasien_raw);
+        $ttd_petugas               = $conn->real_escape_string($ttd_petugas_raw);
+
+        if (empty($nama_pj)) {
+            echo json_encode(['success' => false, 'message' => 'Nama pemberi persetujuan (pasien / wali) wajib diisi']);
+            exit;
+        }
+
+        if (empty($no_surat)) {
+            $date_str = date('Ymd', strtotime($tgl_persetujuan));
+            $clean_rawat = preg_replace('/[^0-9]/', '', $no_rawat);
+            $no_surat = "GC-" . $date_str . "-" . substr($clean_rawat, -4);
+        }
+
+        // Cek apakah data sudah ada
+        $cek = $conn->query("SELECT no_rawat, ttd_pasien, ttd_petugas FROM surat_persetujuan_umum WHERE no_rawat = '$no_rawat' LIMIT 1");
+        if ($cek && $cek->num_rows > 0) {
+            $existing = $cek->fetch_assoc();
+            // Jika ttd baru kosong, pertahankan ttd lama
+            if (empty($ttd_pasien) && !empty($existing['ttd_pasien'])) {
+                $ttd_pasien = $conn->real_escape_string($existing['ttd_pasien']);
+            }
+            if (empty($ttd_petugas) && !empty($existing['ttd_petugas'])) {
+                $ttd_petugas = $conn->real_escape_string($existing['ttd_petugas']);
+            }
+
+            $sql = "UPDATE surat_persetujuan_umum SET
+                        no_surat = '$no_surat',
+                        tgl_persetujuan = '$tgl_persetujuan',
+                        jam_persetujuan = '$jam_persetujuan',
+                        nama_pj = '$nama_pj',
+                        hubungan_pj = '$hubungan_pj',
+                        jk_pj = '$jk_pj',
+                        tgl_lahir_pj = $tgl_lahir_pj,
+                        umur_pj = '$umur_pj',
+                        alamat_pj = '$alamat_pj',
+                        no_ktp_pj = '$no_ktp_pj',
+                        no_telp_pj = '$no_telp_pj',
+                        setuju_rawat_inap_jalan = '$setuju_rawat_inap_jalan',
+                        setuju_pelepasan_informasi = '$setuju_pelepasan_informasi',
+                        nama_keluarga_informasi = '$nama_keluarga_informasi',
+                        setuju_hak_kewajiban = '$setuju_hak_kewajiban',
+                        setuju_privasi_khusus = '$setuju_privasi_khusus',
+                        detail_privasi_khusus = '$detail_privasi_khusus',
+                        setuju_barang_pribadi = '$setuju_barang_pribadi',
+                        setuju_pembayaran = '$setuju_pembayaran',
+                        tipe_penjamin = '$tipe_penjamin',
+                        keterangan_lain = '$keterangan_lain',
+                        ttd_pasien = '$ttd_pasien',
+                        ttd_petugas = '$ttd_petugas',
+                        nip_petugas = '$nip_petugas',
+                        nama_petugas = '$nama_petugas'
+                    WHERE no_rawat = '$no_rawat'";
+        } else {
+            $sql = "INSERT INTO surat_persetujuan_umum (
+                        no_rawat, no_surat, tgl_persetujuan, jam_persetujuan,
+                        nama_pj, hubungan_pj, jk_pj, tgl_lahir_pj, umur_pj,
+                        alamat_pj, no_ktp_pj, no_telp_pj,
+                        setuju_rawat_inap_jalan, setuju_pelepasan_informasi, nama_keluarga_informasi,
+                        setuju_hak_kewajiban, setuju_privasi_khusus, detail_privasi_khusus,
+                        setuju_barang_pribadi, setuju_pembayaran, tipe_penjamin, keterangan_lain,
+                        ttd_pasien, ttd_petugas, nip_petugas, nama_petugas
+                    ) VALUES (
+                        '$no_rawat', '$no_surat', '$tgl_persetujuan', '$jam_persetujuan',
+                        '$nama_pj', '$hubungan_pj', '$jk_pj', $tgl_lahir_pj, '$umur_pj',
+                        '$alamat_pj', '$no_ktp_pj', '$no_telp_pj',
+                        '$setuju_rawat_inap_jalan', '$setuju_pelepasan_informasi', '$nama_keluarga_informasi',
+                        '$setuju_hak_kewajiban', '$setuju_privasi_khusus', '$detail_privasi_khusus',
+                        '$setuju_barang_pribadi', '$setuju_pembayaran', '$tipe_penjamin', '$keterangan_lain',
+                        '$ttd_pasien', '$ttd_petugas', '$nip_petugas', '$nama_petugas'
+                    )";
+        }
+
+        if ($conn->query($sql)) {
+            echo json_encode([
+                'success' => true,
+                'message' => 'Dokumen General Consent & Tanda Tangan berhasil disimpan.',
+                'no_surat' => $no_surat,
+                'no_rawat' => $no_rawat
+            ]);
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Gagal menyimpan data: ' . $conn->error
+            ]);
+        }
+        break;
+
+    case 'hapus_general_consent':
+        $no_rawat = $conn->real_escape_string(sanitize($_POST['no_rawat'] ?? ''));
+        if (empty($no_rawat)) {
+            echo json_encode(['success' => false, 'message' => 'No. Rawat wajib diisi']);
+            exit;
+        }
+        $conn->query("DELETE FROM surat_persetujuan_umum WHERE no_rawat = '$no_rawat'");
+        echo json_encode(['success' => true, 'message' => 'General consent berhasil dihapus.']);
+        break;
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Unknown action']);

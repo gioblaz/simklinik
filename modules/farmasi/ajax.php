@@ -513,11 +513,11 @@ if ($action === 'get_live_resep') {
                   </button>
                 <?php endif; ?>
 
-                <a href="<?= BASE_URL ?>modules/farmasi/cetak_etiket.php?no_resep=<?= urlencode($r['no_resep']) ?>" target="_blank"
-                   class="btn btn-sm btn-secondary" title="Cetak Etiket Obat"
-                   style="padding:4px 8px;font-size:11.5px;display:inline-flex;align-items:center;gap:4px;">
+                <button type="button" class="btn btn-sm btn-secondary" title="Cetak Etiket Obat"
+                        onclick="openModalEtiket('<?= htmlspecialchars($r['no_resep']) ?>')"
+                        style="padding:4px 8px;font-size:11.5px;display:inline-flex;align-items:center;gap:4px;">
                   <i class="fas fa-tag"></i> Etiket
-                </a>
+                </button>
               </div>
 
               <?php if (!$is_diserahkan): ?>

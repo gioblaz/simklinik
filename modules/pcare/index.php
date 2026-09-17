@@ -410,7 +410,7 @@ include dirname(__DIR__, 2) . '/includes/header.php';
 
 
 <!-- ─── MODAL PEMBUATAN RUJUKAN PCARE BPJS ────────────────── -->
-<div class="modal" id="modalBuatRujukan" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.65);z-index:2500;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);">
+<div class="modal-overlay" id="modalBuatRujukan" style="position:fixed;inset:0;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;background:rgba(15,23,42,0.65);z-index:2500;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);box-sizing:border-box;">
   <div class="modal-content" style="background:#ffffff;border-radius:16px;max-width:980px;width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 25px 60px -15px rgba(0,0,0,0.35);overflow:hidden;">
     
     <!-- Modal Header -->
@@ -692,7 +692,7 @@ include dirname(__DIR__, 2) . '/includes/header.php';
 </div>
 
 <!-- ─── Modal Log Uji Koneksi PCare ────────────────────────── -->
-<div class="modal" id="modalLogTest" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.6);z-index:2000;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);">
+<div class="modal-overlay" id="modalLogTest" style="position:fixed;inset:0;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;background:rgba(15,23,42,0.6);z-index:2000;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);box-sizing:border-box;">
   <div class="modal-content" style="background:#ffffff;border-radius:14px;max-width:760px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);overflow:hidden;">
     <div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;background:#f8fafc;">
       <div style="display:flex;align-items:center;gap:10px;">

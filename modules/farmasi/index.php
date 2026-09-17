@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * SIMKlinik — Pelayanan Farmasi & Apotek
  * Alur Kerja: 1. Validasi & Edit Resep -> 2. Telaah Resep (Skrining) -> 3. Penyerahan Obat (Dispensing)
@@ -480,12 +480,12 @@ include dirname(__DIR__, 2) . '/includes/header.php';
                         </button>
                       <?php endif; ?>
 
-                      <!-- Tombol Cetak Etiket -->
-                      <a href="<?= BASE_URL ?>modules/farmasi/cetak_etiket.php?no_resep=<?= urlencode($r['no_resep']) ?>" target="_blank"
-                         class="btn btn-sm btn-secondary" title="Cetak Etiket Obat"
-                         style="padding:4px 8px;font-size:11.5px;display:inline-flex;align-items:center;gap:4px;">
+                      <!-- Tombol Cetak Etiket (In-Page Modal) -->
+                      <button type="button" class="btn btn-sm btn-secondary" title="Cetak Etiket Obat"
+                              onclick="openModalEtiket('<?= htmlspecialchars($r['no_resep']) ?>')"
+                              style="padding:4px 8px;font-size:11.5px;display:inline-flex;align-items:center;gap:4px;">
                         <i class="fas fa-tag"></i> Etiket
-                      </a>
+                      </button>
                     </div>
 
                     <!-- Baris Aksi 2: Penyerahan Obat (Dispensing) -->
@@ -521,8 +521,8 @@ include dirname(__DIR__, 2) . '/includes/header.php';
 <!-- ═══════════════════════════════════════════════════════════ -->
 <!-- MODAL 1: VALIDASI & EDIT RESEP DOKTER                      -->
 <!-- ═══════════════════════════════════════════════════════════ -->
-<div class="modal fade" id="modalEditResep" tabindex="-1" style="display:none;background:rgba(15,23,42,0.6);position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;align-items:center;justify-content:center;padding:20px;">
-  <div style="background:#ffffff;border-radius:14px;width:100%;max-width:760px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
+<div id="modalEditResep" tabindex="-1" style="display:none;background:rgba(15,23,42,0.6);position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
+  <div style="background:#ffffff;border-radius:14px;width:100%;max-width:760px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;margin:auto;">
     
     <div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;">
       <div>
@@ -609,8 +609,8 @@ include dirname(__DIR__, 2) . '/includes/header.php';
 <!-- ═══════════════════════════════════════════════════════════ -->
 <!-- MODAL 2: TELAAH RESEP (SKRINING FARMASETIS & KLINIS)       -->
 <!-- ═══════════════════════════════════════════════════════════ -->
-<div class="modal fade" id="modalTelaah" tabindex="-1" style="display:none;background:rgba(15,23,42,0.6);position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;align-items:center;justify-content:center;padding:20px;">
-  <div style="background:#ffffff;border-radius:14px;width:100%;max-width:680px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
+<div id="modalTelaah" tabindex="-1" style="display:none;background:rgba(15,23,42,0.6);position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;">
+  <div style="background:#ffffff;border-radius:14px;width:100%;max-width:680px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;margin:auto;">
     
     <div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;background:#f5f3ff;">
       <div>
@@ -1189,7 +1189,8 @@ function submitTelaah(e) {
     // Jangan polling jika modal sedang terbuka
     const mEdit = document.getElementById('modalEditResep');
     const mTelaah = document.getElementById('modalTelaah');
-    if ((mEdit && mEdit.style.display === 'flex') || (mTelaah && mTelaah.style.display === 'flex')) {
+    const mEtiket = document.getElementById('modalEtiketObat');
+    if ((mEdit && mEdit.style.display === 'flex') || (mTelaah && mTelaah.style.display === 'flex') || (mEtiket && mEtiket.style.display === 'flex')) {
       return;
     }
 
@@ -1222,6 +1223,63 @@ function submitTelaah(e) {
 
   setInterval(pollLiveResep, 8000);
 })();
+
+// ─── Modal Cetak Etiket (In-Page) ───
+function openModalEtiket(noResep) {
+  const modal = document.getElementById('modalEtiketObat');
+  const frame = document.getElementById('frameEtiketObat');
+  const title = document.getElementById('titleEtiketNoResep');
+  if (!modal || !frame) return;
+
+  if (title) title.textContent = noResep;
+  frame.src = '<?= BASE_URL ?>modules/farmasi/cetak_etiket.php?no_resep=' + encodeURIComponent(noResep);
+  modal.style.display = 'flex';
+}
+
+function closeModalEtiket() {
+  const modal = document.getElementById('modalEtiketObat');
+  const frame = document.getElementById('frameEtiketObat');
+  if (frame) frame.src = 'about:blank';
+  if (modal) modal.style.display = 'none';
+}
+
+function printFrameEtiket() {
+  const frame = document.getElementById('frameEtiketObat');
+  if (frame && frame.contentWindow) {
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+  }
+}
 </script>
+
+<!-- ─── MODAL IN-PAGE CETAK LABEL / ETIKET OBAT THERMAL ─── -->
+<div id="modalEtiketObat" style="position:fixed;inset:0;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;background:rgba(15,23,42,0.55);z-index:99999;display:none;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;backdrop-filter:blur(3px);">
+  <div style="background:#ffffff;border-radius:12px;width:100%;max-width:900px;height:86vh;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 25px 60px -15px rgba(0,0,0,0.4);overflow:hidden;border:1px solid #cbd5e1;margin:auto;">
+    
+    <!-- Modal Header (Sesuai Mockup Cetak) -->
+    <div style="padding:16px 24px 10px 24px;display:flex;align-items:flex-start;justify-content:space-between;background:#ffffff;flex-shrink:0;">
+      <div>
+        <h3 style="font-size:17px;font-weight:700;color:#1e293b;margin:0;line-height:1.2;">Cetak</h3>
+        <p style="font-size:12.5px;color:#64748b;margin:6px 0 0 0;">Proses cetak membutuhkan waktu, mohon ditunggu!</p>
+      </div>
+      <button type="button" onclick="closeModalEtiket()" style="background:none;border:none;color:#94a3b8;font-size:24px;cursor:pointer;padding:0 4px;line-height:1;margin-top:-2px;" title="Tutup">
+        &times;
+      </button>
+    </div>
+
+    <!-- Modal Body: Iframe Preview PDF Viewer -->
+    <div style="flex:1;min-height:0;padding:0 24px 10px 24px;background:#ffffff;display:flex;flex-direction:column;">
+      <iframe id="frameEtiketObat" src="about:blank" style="width:100%;height:100%;min-height:480px;flex:1;border:1px solid #1e293b;border-radius:4px;display:block;background:#323639;"></iframe>
+    </div>
+
+    <!-- Modal Footer: Tombol Tutup di Tengah -->
+    <div style="padding:10px 24px 18px 24px;display:flex;justify-content:center;align-items:center;background:#ffffff;flex-shrink:0;">
+      <button type="button" onclick="closeModalEtiket()" style="background:#f1f5f9;border:1px solid #cbd5e1;color:#334155;font-size:13px;font-weight:600;padding:7px 34px;border-radius:6px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
+        Tutup
+      </button>
+    </div>
+
+  </div>
+</div>
 
 <?php include dirname(__DIR__, 2) . '/includes/footer.php'; ?>

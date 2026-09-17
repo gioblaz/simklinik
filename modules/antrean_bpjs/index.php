@@ -760,7 +760,7 @@ include dirname(__DIR__, 2) . '/includes/header.php';
 </div>
 
 <!-- ─── Modal Simulasi Booking Mobile JKN ─────────────────── -->
-<div id="modalSimulator" class="modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:9999;padding:16px;">
+<div id="modalSimulator" class="modal-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:9999;padding:16px;">
   <div class="modal-content" style="background:#fff;border-radius:12px;max-width:520px;width:100%;box-shadow:0 10px 25px rgba(0,0,0,0.2);overflow:hidden;">
     
     <div class="modal-header" style="padding:14px 18px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;">

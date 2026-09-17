@@ -64,6 +64,7 @@ function can_access(string $module): bool {
     if (in_array($module, $modules, true)) return true;
 
     // Sub-module / alias access
+    if ($module === 'general_consent' && (in_array('rekam_medis', $modules, true) || in_array('pendaftaran', $modules, true))) return true;
     if ($module === 'master_lab' && in_array('laboratorium', $modules, true)) return true;
     if ($module === 'bridging_monitor' && (in_array('settings', $modules, true) || in_array('pcare', $modules, true))) return true;
     if ($module === 'mapping' && (in_array('settings', $modules, true) || in_array('pcare', $modules, true) || in_array('satu_sehat', $modules, true))) return true;

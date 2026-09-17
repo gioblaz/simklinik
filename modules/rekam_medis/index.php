@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * SIMKlinik — Rekam Medis (Daftar Antrian & Pemeriksaan)
  */
@@ -349,6 +349,10 @@ include dirname(__DIR__, 2) . '/includes/header.php';
                     <a href="<?= BASE_URL ?>modules/rekam_medis/periksa.php?no_rawat=<?= urlencode($k['no_rawat']) ?>"
                        class="btn btn-sm <?= $k['stts']==='Sudah' ? 'btn-outline-primary' : 'btn-primary' ?>" title="Periksa Medis (SOAP)">
                       <i class="fas fa-stethoscope"></i> <?= $k['stts']==='Sudah' ? 'Edit EMR' : 'Periksa' ?>
+                    </a>
+                    <a href="<?= BASE_URL ?>modules/rekam_medis/general_consent.php?no_rawat=<?= urlencode($k['no_rawat']) ?>"
+                       target="_blank" class="btn btn-sm btn-outline btn-icon" title="General Consent (Persetujuan Umum)" style="color:#4f46e5;border-color:#c7d2fe;">
+                      <i class="fas fa-file-signature"></i>
                     </a>
                     <?php if ($k['stts'] === 'Sudah'): ?>
                       <a href="<?= BASE_URL ?>modules/rekam_medis/cetak_resume.php?no_rawat=<?= urlencode($k['no_rawat']) ?>"

@@ -920,6 +920,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_live_pendaftaran') {
                  class="btn btn-sm btn-secondary" style="padding:5px 8px;font-size:11.5px;" title="Profil Pasien">
                 <i class="fas fa-user"></i>
               </a>
+              <button type="button" class="btn btn-sm btn-secondary" style="padding:5px 8px;font-size:11.5px;color:#4f46e5;" title="General Consent & Tanda Tangan Digital" onclick="bukaModalGeneralConsent('<?= htmlspecialchars($k['no_rawat']) ?>')">
+                <i class="fas fa-file-signature"></i>
+              </button>
               <?php if ($k['stts'] !== 'Batal' && $k['stts'] !== 'Sudah'): ?>
                 <button type="button" class="btn btn-sm btn-outline" style="padding:5px 8px;font-size:11.5px;color:#ef4444;border-color:#fca5a5;" title="Batalkan Kunjungan"
                         onclick="ubahStatus('<?= $k['no_rawat'] ?>', 'batal')">
@@ -1332,6 +1335,9 @@ include dirname(__DIR__, 2) . '/includes/header.php';
                        class="btn btn-sm btn-secondary" style="padding:5px 8px;font-size:11.5px;" title="Profil Pasien">
                       <i class="fas fa-user"></i>
                     </a>
+                    <button type="button" class="btn btn-sm btn-secondary" style="padding:5px 8px;font-size:11.5px;color:#4f46e5;" title="General Consent & Tanda Tangan Digital" onclick="bukaModalGeneralConsent('<?= htmlspecialchars($k['no_rawat']) ?>')">
+                      <i class="fas fa-file-signature"></i>
+                    </button>
                     <?php if ($k['stts'] !== 'Batal' && $k['stts'] !== 'Sudah'): ?>
                       <button type="button" class="btn btn-sm btn-outline" style="padding:5px 8px;font-size:11.5px;color:#ef4444;border-color:#fca5a5;" title="Batalkan Kunjungan"
                               onclick="ubahStatus('<?= $k['no_rawat'] ?>', 'batal')">
@@ -2303,7 +2309,7 @@ function kirimKunjunganPcareRow(noRawat) {
 </script>
 
 <!-- ─── Modal Pembuatan & Pengiriman Surat Rujukan BPJS PCare ──── -->
-<div class="modal" id="modalBuatRujukan" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.65);z-index:2000;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);">
+<div class="modal-overlay" id="modalBuatRujukan" style="position:fixed;inset:0;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;background:rgba(15,23,42,0.6);z-index:9999;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);box-sizing:border-box;">
   <div class="modal-content" style="background:#ffffff;border-radius:14px;max-width:820px;width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 25px 50px -12px rgba(0,0,0,0.3);overflow:hidden;animation:modalFadeIn 0.2s ease-out;">
     
     <!-- Modal Header -->
@@ -2584,4 +2590,721 @@ function kirimKunjunganPcareRow(noRawat) {
   </div>
 </div>
 
+<!-- ─── MODAL GENERAL CONSENT & DIGITAL SIGNATURE DRAWING PAD (CENTERED & WIDE) ─── -->
+<style>
+@keyframes gcModalZoomIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+#modalGeneralConsent {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(15, 23, 42, 0.6) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  z-index: 99999 !important;
+  display: none;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px !important;
+  box-sizing: border-box !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  transform: none !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+#modalGeneralConsent .gc-wide-modal-box {
+  background: #ffffff;
+  border-radius: 14px;
+  max-width: 1240px;
+  width: 95vw;
+  height: 90vh;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.35);
+  border: 1px solid #cbd5e1;
+  overflow: hidden;
+  animation: gcModalZoomIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  margin: auto;
+}
+.gc-split-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 992px) {
+  .gc-split-grid {
+    grid-template-columns: 1fr;
+  }
+  #modalGeneralConsent .gc-wide-modal-box {
+    height: 95vh;
+    max-height: 95vh;
+  }
+}
+</style>
+
+<div class="modal-overlay" id="modalGeneralConsent">
+  <div class="gc-wide-modal-box">
+    
+    <!-- Modal Header -->
+    <div style="padding:16px 24px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);color:#ffffff;flex-shrink:0;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:20px;">
+          <i class="fas fa-file-signature"></i>
+        </div>
+        <div>
+          <h3 style="font-size:16px;font-weight:800;margin:0;color:#ffffff;line-height:1.2;">Persetujuan Umum (General Consent) &amp; Tanda Tangan Digital</h3>
+          <p style="font-size:12px;color:rgba(255,255,255,0.85);margin:2px 0 0 0;">Standar Akreditasi Klinik &amp; Rekam Medis Elektronik (Permenkes RI)</p>
+        </div>
+      </div>
+      <button type="button" onclick="tutupModalGeneralConsent()" style="background:rgba(255,255,255,0.15);border:none;color:#ffffff;font-size:22px;cursor:pointer;width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;" title="Tutup">
+        &times;
+      </button>
+    </div>
+
+    <!-- Modal Body Form (Scrollable Content) -->
+    <div style="padding:20px 24px;overflow-y:auto;flex:1;background:#f8fafc;" id="bodyModalGC">
+      
+      <!-- Loading State -->
+      <div id="loaderModalGC" style="text-align:center;padding:60px 20px;color:#0284c7;">
+        <i class="fas fa-spinner fa-spin fa-3x"></i>
+        <div style="margin-top:14px;font-size:14px;font-weight:700;">Memuat data pasien &amp; persetujuan...</div>
+      </div>
+
+      <!-- Main Form Container -->
+      <form id="formModalGC" style="display:none;" autocomplete="off">
+        <input type="hidden" name="no_rawat" id="mgc_no_rawat">
+        <input type="hidden" name="ttd_pasien" id="mgc_input_ttd_pasien">
+        <input type="hidden" name="ttd_petugas" id="mgc_input_ttd_petugas">
+
+        <!-- Top Banner Info Pasien -->
+        <div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:12px;padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div>
+            <div style="font-size:16px;font-weight:800;color:#1e3a8a;" id="mgc_lbl_pasien">-</div>
+            <div style="font-size:12px;color:#475569;margin-top:3px;display:flex;gap:14px;flex-wrap:wrap;">
+              <span><i class="fas fa-id-card text-primary"></i> <strong>No. RM:</strong> <span id="mgc_lbl_rm">-</span></span>
+              <span><i class="fas fa-barcode text-primary"></i> <strong>No. Rawat:</strong> <span id="mgc_lbl_rawat">-</span></span>
+              <span><i class="fas fa-user text-primary"></i> <strong>JK / Umur:</strong> <span id="mgc_lbl_jk_umur">-</span></span>
+              <span><i class="fas fa-clinic-medical text-primary"></i> <strong>Poli:</strong> <span id="mgc_lbl_poli">-</span></span>
+              <span><i class="fas fa-user-md text-primary"></i> <strong>Dokter:</strong> <span id="mgc_lbl_dokter">-</span></span>
+            </div>
+          </div>
+          <div id="mgc_badge_status_saved"></div>
+        </div>
+
+        <!-- 2-Column Wide Split Layout -->
+        <div class="gc-split-grid">
+          
+          <!-- ─── LEFT COLUMN: IDENTITAS & KLAUSUL ─── -->
+          <div>
+            
+            <!-- 1. Informasi Surat -->
+            <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.03);">
+              <div style="font-size:12.5px;font-weight:800;color:#1e3a8a;margin-bottom:10px;text-transform:uppercase;display:flex;align-items:center;gap:6px;">
+                <i class="fas fa-file-invoice"></i> 1. Informasi Dokumen &amp; Waktu Persetujuan
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:10px;">
+                <div class="form-group">
+                  <label class="form-label" style="font-size:11px;font-weight:700;">Nomor Dokumen GC</label>
+                  <input type="text" name="no_surat" id="mgc_no_surat" class="form-control form-control-sm" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" style="font-size:11px;font-weight:700;">Tanggal</label>
+                  <input type="date" name="tgl_persetujuan" id="mgc_tgl_persetujuan" class="form-control form-control-sm" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" style="font-size:11px;font-weight:700;">Jam</label>
+                  <input type="time" name="jam_persetujuan" id="mgc_jam_persetujuan" class="form-control form-control-sm" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" style="font-size:11px;font-weight:700;">Penjamin</label>
+                  <input type="text" name="tipe_penjamin" id="mgc_tipe_penjamin" class="form-control form-control-sm" required>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Identitas Pemberi Persetujuan -->
+            <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.03);">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+                <div style="font-size:12.5px;font-weight:800;color:#1e3a8a;text-transform:uppercase;display:flex;align-items:center;gap:6px;">
+                  <i class="fas fa-user-edit"></i> 2. Pemberi Persetujuan (Pasien / Wali)
+                </div>
+                <div style="display:flex;gap:6px;">
+                  <button type="button" class="btn btn-xs btn-outline-primary" onclick="salinPasienModalGC()" style="font-size:11px;padding:3px 8px;border-radius:5px;font-weight:600;">
+                    <i class="fas fa-user-check"></i> Pasien Sendiri
+                  </button>
+                  <button type="button" class="btn btn-xs btn-outline-info" onclick="salinKeluargaModalGC()" style="font-size:11px;padding:3px 8px;border-radius:5px;font-weight:600;">
+                    <i class="fas fa-users"></i> Salin PJ Pasien
+                  </button>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1.8fr 1.2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+                <div class="form-group">
+                  <label class="form-label" style="font-size:11px;font-weight:700;">Nama Lengkap <span class="text-danger">*</span></label>
+                  <input type="text" name="nama_pj" id="mgc_nama_pj" class="form-control form-control-sm" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" style="font-size:11px;font-weight:700;">Hubungan <span class="text-danger">*</span></label>
+                  <select name="hubungan_pj" id="mgc_hubungan_pj" class="form-control form-control-sm" required>
+                    <option value="Diri Sendiri">Diri Sendiri</option>
+                    <option value="Suami">Suami</option>
+                    <option value="Istri">Istri</option>
+                    <option value="Anak">Anak</option>
+                    <option value="Orang Tua">Orang Tua</option>
+                    <option value="Saudara">Saudara</option>
+                    <option value="Keluarga">Keluarga</option>
+                    <option value="Wali">Wali</option>
+                    <option value="Lain-lain">Lain-lain</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" style="font-size:11px;font-weight:700;">Kelamin</label>
+                  <select name="jk_pj" id="mgc_jk_pj" class="form-control form-control-sm">
+                    <option value="L">Laki-laki</option>
+                    <option value="P">Perempuan</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" style="font-size:11px;font-weight:700;">Usia</label>
+                  <input type="text" name="umur_pj" id="mgc_umur_pj" class="form-control form-control-sm" placeholder="Contoh: 30 Th">
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1.2fr 1.1fr 2fr;gap:10px;">
+                <div class="form-group">
+                  <label class="form-label" style="font-size:11px;font-weight:700;">No. KTP / NIK</label>
+                  <input type="text" name="no_ktp_pj" id="mgc_no_ktp_pj" class="form-control form-control-sm" placeholder="16 digit NIK">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" style="font-size:11px;font-weight:700;">No. HP / Telp</label>
+                  <input type="text" name="no_telp_pj" id="mgc_no_telp_pj" class="form-control form-control-sm" placeholder="08xxxxxxxx">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" style="font-size:11px;font-weight:700;">Alamat</label>
+                  <input type="text" name="alamat_pj" id="mgc_alamat_pj" class="form-control form-control-sm" placeholder="Alamat domisili">
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Klausul Butir Persetujuan -->
+            <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.03);">
+              <div style="font-size:12.5px;font-weight:800;color:#1e3a8a;margin-bottom:10px;text-transform:uppercase;display:flex;align-items:center;gap:6px;">
+                <i class="fas fa-clipboard-check"></i> 3. Klausul &amp; Butir-Butir Persetujuan
+              </div>
+              
+              <div style="font-size:11.5px;display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;background:#f8fafc;padding:8px 12px;border-radius:8px;border:1px solid #e2e8f0;">
+                  <span><strong>I. Pelayanan &amp; Tindakan Medis Standar</strong></span>
+                  <select name="setuju_rawat_inap_jalan" id="mgc_setuju_rawat_inap_jalan" class="form-control form-control-sm" style="width:105px;">
+                    <option value="Setuju">Setuju</option>
+                    <option value="Tidak">Tidak</option>
+                  </select>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;background:#f8fafc;padding:8px 12px;border-radius:8px;border:1px solid #e2e8f0;">
+                  <span><strong>II. Hak &amp; Kewajiban Pasien</strong></span>
+                  <select name="setuju_hak_kewajiban" id="mgc_setuju_hak_kewajiban" class="form-control form-control-sm" style="width:105px;">
+                    <option value="Setuju">Setuju</option>
+                    <option value="Tidak">Tidak</option>
+                  </select>
+                </div>
+                <div style="background:#f8fafc;padding:10px 12px;border-radius:8px;border:1px solid #e2e8f0;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                    <span><strong>III. Pelepasan Informasi Medis ke Keluarga</strong></span>
+                    <select name="setuju_pelepasan_informasi" id="mgc_setuju_pelepasan_informasi" class="form-control form-control-sm" style="width:105px;">
+                      <option value="Setuju">Setuju</option>
+                      <option value="Tidak">Tidak</option>
+                    </select>
+                  </div>
+                  <input type="text" name="nama_keluarga_informasi" id="mgc_nama_keluarga_informasi" class="form-control form-control-sm" placeholder="Nama keluarga yang diberi akses informasi (contoh: Diri Sendiri / Suami / Orang Tua)">
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ─── RIGHT COLUMN: DIGITAL SIGNATURE DRAWING PAD STATION ─── -->
+          <div>
+            <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.03);">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <div style="font-size:12.5px;font-weight:800;color:#1e3a8a;text-transform:uppercase;display:flex;align-items:center;gap:6px;">
+                  <i class="fas fa-signature text-primary"></i> 4. Drawing Pad Tanda Tangan Digital
+                </div>
+                <span style="font-size:11px;color:#64748b;"><i class="fas fa-hand-pointer"></i> Touch / Mouse / Stylus</span>
+              </div>
+
+              <!-- Pad Pasien / Wali -->
+              <div style="border:1.5px solid #cbd5e1;border-radius:10px;padding:12px;background:#fafafa;margin-bottom:14px;" id="mgc_card_pad_pasien">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <span style="font-size:12.5px;font-weight:800;color:#1e293b;">Tanda Tangan Pasien / Wali</span>
+                  <span id="mgc_badge_sig_pasien" style="font-size:10.5px;padding:3px 8px;border-radius:12px;font-weight:700;background:#fee2e2;color:#991b1b;">Belum TTD</span>
+                </div>
+                
+                <div style="position:relative;width:100%;height:190px;background:#ffffff;border:1.5px dashed #94a3b8;border-radius:8px;overflow:hidden;touch-action:none;cursor:crosshair;">
+                  <canvas id="mgc_canvas_pasien" style="width:100%;height:100%;display:block;"></canvas>
+                  <div id="mgc_ph_pasien" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#94a3b8;font-size:12px;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:4px;">
+                    <i class="fas fa-signature" style="font-size:26px;opacity:0.4;"></i>
+                    <span>Bubuhkan tanda tangan pasien / wali di sini</span>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+                  <div style="display:flex;gap:6px;align-items:center;">
+                    <span style="font-size:11px;color:#64748b;font-weight:600;">Tinta:</span>
+                    <button type="button" class="btn-color-dot active" style="width:20px;height:20px;border-radius:50%;background:#1e3a8a;border:2px solid transparent;cursor:pointer;" onclick="setModalPadColor('pasien','#1e3a8a',this)" title="Biru Tua"></button>
+                    <button type="button" class="btn-color-dot" style="width:20px;height:20px;border-radius:50%;background:#111827;border:2px solid transparent;cursor:pointer;" onclick="setModalPadColor('pasien','#111827',this)" title="Hitam"></button>
+                  </div>
+                  <div style="display:flex;gap:6px;">
+                    <button type="button" class="btn btn-xs btn-outline-secondary" onclick="undoModalPad('pasien')" style="font-size:11px;padding:3px 8px;">
+                      <i class="fas fa-undo"></i> Undo
+                    </button>
+                    <button type="button" class="btn btn-xs btn-outline-danger" onclick="clearModalPad('pasien')" style="font-size:11px;padding:3px 8px;">
+                      <i class="fas fa-trash-alt"></i> Bersihkan
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pad Petugas Admisi -->
+              <div style="border:1.5px solid #cbd5e1;border-radius:10px;padding:12px;background:#fafafa;" id="mgc_card_pad_petugas">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <span style="font-size:12.5px;font-weight:800;color:#1e293b;">Tanda Tangan Petugas Admisi / Saksi</span>
+                  <span id="mgc_badge_sig_petugas" style="font-size:10.5px;padding:3px 8px;border-radius:12px;font-weight:700;background:#fee2e2;color:#991b1b;">Belum TTD</span>
+                </div>
+                
+                <div style="position:relative;width:100%;height:150px;background:#ffffff;border:1.5px dashed #94a3b8;border-radius:8px;overflow:hidden;touch-action:none;cursor:crosshair;">
+                  <canvas id="mgc_canvas_petugas" style="width:100%;height:100%;display:block;"></canvas>
+                  <div id="mgc_ph_petugas" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#94a3b8;font-size:12px;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:4px;">
+                    <i class="fas fa-signature" style="font-size:24px;opacity:0.4;"></i>
+                    <span>Bubuhkan tanda tangan petugas di sini</span>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+                  <div style="display:flex;gap:6px;align-items:center;">
+                    <span style="font-size:11px;color:#64748b;font-weight:600;">Tinta:</span>
+                    <button type="button" class="btn-color-dot active" style="width:20px;height:20px;border-radius:50%;background:#1e3a8a;border:2px solid transparent;cursor:pointer;" onclick="setModalPadColor('petugas','#1e3a8a',this)" title="Biru Tua"></button>
+                    <button type="button" class="btn-color-dot" style="width:20px;height:20px;border-radius:50%;background:#111827;border:2px solid transparent;cursor:pointer;" onclick="setModalPadColor('petugas','#111827',this)" title="Hitam"></button>
+                  </div>
+                  <div style="display:flex;gap:6px;">
+                    <button type="button" class="btn btn-xs btn-outline-secondary" onclick="undoModalPad('petugas')" style="font-size:11px;padding:3px 8px;">
+                      <i class="fas fa-undo"></i> Undo
+                    </button>
+                    <button type="button" class="btn btn-xs btn-outline-danger" onclick="clearModalPad('petugas')" style="font-size:11px;padding:3px 8px;">
+                      <i class="fas fa-trash-alt"></i> Bersihkan
+                    </button>
+                  </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+                  <input type="text" name="nama_petugas" id="mgc_nama_petugas" class="form-control form-control-sm" placeholder="Nama Petugas" required style="font-size:11.5px;">
+                  <input type="text" name="nip_petugas" id="mgc_nip_petugas" class="form-control form-control-sm" placeholder="NIP / ID Petugas" style="font-size:11.5px;">
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+      </form>
+
+    </div>
+
+    <!-- Modal Footer -->
+    <div style="padding:14px 24px;border-top:1px solid #e2e8f0;background:#ffffff;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;flex-shrink:0;">
+      <button type="button" class="btn btn-secondary" onclick="tutupModalGeneralConsent()" style="padding:7px 16px;font-weight:600;">Tutup</button>
+      <div style="display:flex;gap:10px;">
+        <button type="button" class="btn btn-outline-primary" id="mgc_btn_cetak" onclick="cetakModalGeneralConsent()" style="font-weight:600;padding:7px 16px;">
+          <i class="fas fa-print"></i> Cetak Lembar GC
+        </button>
+        <button type="button" class="btn btn-primary" id="mgc_btn_simpan" onclick="simpanModalGeneralConsent()" style="font-weight:700;padding:7px 22px;">
+          <i class="fas fa-save"></i> Simpan General Consent
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── MODAL GENERAL CONSENT JAVASCRIPT ENGINE (CENTERED & WIDE) ───
+let mgcPasienData = null;
+let mgcConsentData = null;
+
+const mgcPads = {
+  pasien: {
+    canvas: null,
+    ctx: null,
+    isDrawing: false,
+    strokes: [],
+    currentStroke: [],
+    color: '#1e3a8a',
+    lineWidth: 2.5,
+    hasContent: false,
+    existingImg: ''
+  },
+  petugas: {
+    canvas: null,
+    ctx: null,
+    isDrawing: false,
+    strokes: [],
+    currentStroke: [],
+    color: '#1e3a8a',
+    lineWidth: 2.5,
+    hasContent: false,
+    existingImg: ''
+  }
+};
+
+function bukaModalGeneralConsent(no_rawat) {
+  const modal = document.getElementById('modalGeneralConsent');
+  const loader = document.getElementById('loaderModalGC');
+  const form = document.getElementById('formModalGC');
+  
+  if (!modal) return;
+  modal.style.display = 'flex';
+  loader.style.display = 'block';
+  form.style.display = 'none';
+
+  fetch(`<?= BASE_URL ?>modules/rekam_medis/ajax.php?action=get_general_consent&no_rawat=${encodeURIComponent(no_rawat)}`, {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(res => {
+    loader.style.display = 'none';
+    if (!res.success) {
+      alert(res.message || 'Gagal memuat data');
+      tutupModalGeneralConsent();
+      return;
+    }
+
+    form.style.display = 'block';
+    mgcPasienData = res.pasien;
+    mgcConsentData = res.consent;
+
+    // Populate Info Pasien
+    document.getElementById('mgc_no_rawat').value = res.pasien.no_rawat;
+    document.getElementById('mgc_lbl_pasien').textContent = `${res.pasien.nm_pasien} (${res.pasien.jk === 'L' ? 'Laki-laki' : 'Perempuan'})`;
+    document.getElementById('mgc_lbl_rm').textContent = res.pasien.no_rkm_medis;
+    document.getElementById('mgc_lbl_rawat').textContent = res.pasien.no_rawat;
+    document.getElementById('mgc_lbl_jk_umur').textContent = res.pasien.umur || '-';
+    document.getElementById('mgc_lbl_poli').textContent = res.pasien.nm_poli || '-';
+    document.getElementById('mgc_lbl_dokter').textContent = res.pasien.nm_dokter || '-';
+
+    const statusBadge = document.getElementById('mgc_badge_status_saved');
+    if (res.consent) {
+      statusBadge.innerHTML = '<span style="background:#dcfce7;color:#15803d;font-size:12px;padding:4px 12px;border-radius:20px;font-weight:700;"><i class="fas fa-check-circle"></i> Sudah Ditandatangani</span>';
+    } else {
+      statusBadge.innerHTML = '<span style="background:#fef3c7;color:#b45309;font-size:12px;padding:4px 12px;border-radius:20px;font-weight:700;"><i class="fas fa-clock"></i> Belum Mengisi</span>';
+    }
+
+    // Populate Fields
+    const cleanRawat = (res.pasien.no_rawat || '').replace(/[^0-9]/g, '');
+    const dateStr = (res.pasien.tgl_registrasi || '').replace(/-/g, '');
+    const defaultNoSurat = `GC-${dateStr}-${cleanRawat.slice(-4)}`;
+
+    document.getElementById('mgc_no_surat').value = res.consent?.no_surat || defaultNoSurat;
+    document.getElementById('mgc_tgl_persetujuan').value = res.consent?.tgl_persetujuan || res.pasien.tgl_registrasi || '<?= date('Y-m-d') ?>';
+    document.getElementById('mgc_jam_persetujuan').value = res.consent?.jam_persetujuan || res.pasien.jam_reg || '<?= date('H:i:s') ?>';
+    document.getElementById('mgc_tipe_penjamin').value = res.consent?.tipe_penjamin || res.pasien.nm_penjab || 'Umum';
+
+    document.getElementById('mgc_nama_pj').value = res.consent?.nama_pj || res.pasien.nm_pasien;
+    document.getElementById('mgc_hubungan_pj').value = res.consent?.hubungan_pj || 'Diri Sendiri';
+    document.getElementById('mgc_jk_pj').value = res.consent?.jk_pj || res.pasien.jk || 'L';
+    document.getElementById('mgc_umur_pj').value = res.consent?.umur_pj || res.pasien.umur || '';
+    document.getElementById('mgc_no_ktp_pj').value = res.consent?.no_ktp_pj || res.pasien.no_ktp || '';
+    document.getElementById('mgc_no_telp_pj').value = res.consent?.no_telp_pj || res.pasien.no_tlp || '';
+    document.getElementById('mgc_alamat_pj').value = res.consent?.alamat_pj || res.pasien.alamat || '';
+
+    document.getElementById('mgc_setuju_rawat_inap_jalan').value = res.consent?.setuju_rawat_inap_jalan || 'Setuju';
+    document.getElementById('mgc_setuju_hak_kewajiban').value = res.consent?.setuju_hak_kewajiban || 'Setuju';
+    document.getElementById('mgc_setuju_pelepasan_informasi').value = res.consent?.setuju_pelepasan_informasi || 'Setuju';
+    document.getElementById('mgc_nama_keluarga_informasi').value = res.consent?.nama_keluarga_informasi || res.pasien.namakeluarga || 'Diri Sendiri / Keluarga Inti';
+
+    document.getElementById('mgc_nama_petugas').value = res.consent?.nama_petugas || res.petugas_default?.nama || 'Petugas Admisi';
+    document.getElementById('mgc_nip_petugas').value = res.consent?.nip_petugas || res.petugas_default?.nip || '-';
+
+    document.getElementById('mgc_input_ttd_pasien').value = res.consent?.ttd_pasien || '';
+    document.getElementById('mgc_input_ttd_petugas').value = res.consent?.ttd_petugas || '';
+
+    // Initialize Canvas Pads after DOM rendered
+    setTimeout(() => {
+      initModalPad('pasien', res.consent?.ttd_pasien || '');
+      initModalPad('petugas', res.consent?.ttd_petugas || '');
+    }, 120);
+  })
+  .catch(err => {
+    loader.style.display = 'none';
+    alert('Terjadi kesalahan jaringan: ' + err);
+    tutupModalGeneralConsent();
+  });
+}
+
+function tutupModalGeneralConsent() {
+  const modal = document.getElementById('modalGeneralConsent');
+  if (modal) modal.style.display = 'none';
+}
+
+function initModalPad(key, existingImg = '') {
+  const pad = mgcPads[key];
+  const canvas = document.getElementById(key === 'pasien' ? 'mgc_canvas_pasien' : 'mgc_canvas_petugas');
+  if (!canvas) return;
+
+  pad.canvas = canvas;
+  pad.ctx = canvas.getContext('2d');
+  pad.strokes = [];
+  pad.currentStroke = [];
+  pad.hasContent = false;
+  pad.existingImg = existingImg;
+
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 2;
+  canvas.width = (rect.width || 450) * dpr;
+  canvas.height = (rect.height || (key === 'pasien' ? 190 : 150)) * dpr;
+  pad.ctx.scale(dpr, dpr);
+
+  const ph = document.getElementById(key === 'pasien' ? 'mgc_ph_pasien' : 'mgc_ph_petugas');
+  const badge = document.getElementById(key === 'pasien' ? 'mgc_badge_sig_pasien' : 'mgc_badge_sig_petugas');
+
+  if (existingImg) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+      pad.ctx.drawImage(img, 0, 0, rect.width, rect.height);
+      pad.hasContent = true;
+      if (ph) ph.style.display = 'none';
+      if (badge) {
+        badge.style.background = '#dcfce7';
+        badge.style.color = '#15803d';
+        badge.textContent = '✓ TTD Terisi';
+      }
+    };
+    img.src = existingImg;
+  } else {
+    if (ph) ph.style.display = 'flex';
+    if (badge) {
+      badge.style.background = '#fee2e2';
+      badge.style.color = '#991b1b';
+      badge.textContent = 'Belum TTD';
+    }
+  }
+
+  // Pointer & Touch Handlers
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    let cx = e.clientX, cy = e.clientY;
+    if (e.touches && e.touches.length > 0) {
+      cx = e.touches[0].clientX;
+      cy = e.touches[0].clientY;
+    }
+    return { x: cx - r.left, y: cy - r.top };
+  }
+
+  function start(e) {
+    e.preventDefault();
+    pad.isDrawing = true;
+    const pos = getPos(e);
+    pad.currentStroke = [{ x: pos.x, y: pos.y, color: pad.color, width: pad.lineWidth }];
+    if (ph) ph.style.display = 'none';
+  }
+
+  function move(e) {
+    if (!pad.isDrawing) return;
+    e.preventDefault();
+    const pos = getPos(e);
+    pad.currentStroke.push({ x: pos.x, y: pos.y, color: pad.color, width: pad.lineWidth });
+
+    const pts = pad.currentStroke;
+    if (pts.length < 2) return;
+    const ctx = pad.ctx;
+    ctx.strokeStyle = pad.color;
+    ctx.lineWidth = pad.lineWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(pts[pts.length - 2].x, pts[pts.length - 2].y);
+    ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+    ctx.stroke();
+  }
+
+  function stop(e) {
+    if (!pad.isDrawing) return;
+    pad.isDrawing = false;
+    if (pad.currentStroke.length > 0) {
+      pad.strokes.push([...pad.currentStroke]);
+      pad.currentStroke = [];
+      pad.hasContent = true;
+      if (badge) {
+        badge.style.background = '#dcfce7';
+        badge.style.color = '#15803d';
+        badge.textContent = '✓ TTD Terisi';
+      }
+    }
+  }
+
+  canvas.onmousedown = start;
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', stop);
+
+  canvas.addEventListener('touchstart', start, { passive: false });
+  window.addEventListener('touchmove', move, { passive: false });
+  window.addEventListener('touchend', stop, { passive: false });
+}
+
+function clearModalPad(key) {
+  const pad = mgcPads[key];
+  pad.strokes = [];
+  pad.currentStroke = [];
+  pad.hasContent = false;
+  pad.existingImg = '';
+  const rect = pad.canvas.getBoundingClientRect();
+  pad.ctx.clearRect(0, 0, rect.width, rect.height);
+
+  const ph = document.getElementById(key === 'pasien' ? 'mgc_ph_pasien' : 'mgc_ph_petugas');
+  const badge = document.getElementById(key === 'pasien' ? 'mgc_badge_sig_pasien' : 'mgc_badge_sig_petugas');
+  if (ph) ph.style.display = 'flex';
+  if (badge) {
+    badge.style.background = '#fee2e2';
+    badge.style.color = '#991b1b';
+    badge.textContent = 'Belum TTD';
+  }
+  document.getElementById(key === 'pasien' ? 'mgc_input_ttd_pasien' : 'mgc_input_ttd_petugas').value = '';
+}
+
+function undoModalPad(key) {
+  const pad = mgcPads[key];
+  if (pad.strokes.length > 0) {
+    pad.strokes.pop();
+    const rect = pad.canvas.getBoundingClientRect();
+    pad.ctx.clearRect(0, 0, rect.width, rect.height);
+    
+    pad.strokes.forEach(stroke => {
+      if (stroke.length < 2) return;
+      pad.ctx.beginPath();
+      pad.ctx.strokeStyle = stroke[0].color || pad.color;
+      pad.ctx.lineWidth = stroke[0].width || pad.lineWidth;
+      pad.ctx.lineCap = 'round';
+      pad.ctx.lineJoin = 'round';
+      pad.ctx.moveTo(stroke[0].x, stroke[0].y);
+      for (let i = 1; i < stroke.length; i++) {
+        pad.ctx.lineTo(stroke[i].x, stroke[i].y);
+      }
+      pad.ctx.stroke();
+    });
+
+    if (pad.strokes.length === 0 && !pad.existingImg) {
+      pad.hasContent = false;
+      const ph = document.getElementById(key === 'pasien' ? 'mgc_ph_pasien' : 'mgc_ph_petugas');
+      const badge = document.getElementById(key === 'pasien' ? 'mgc_badge_sig_pasien' : 'mgc_badge_sig_petugas');
+      if (ph) ph.style.display = 'flex';
+      if (badge) {
+        badge.style.background = '#fee2e2';
+        badge.style.color = '#991b1b';
+        badge.textContent = 'Belum TTD';
+      }
+    }
+  }
+}
+
+function setModalPadColor(key, color, btn) {
+  mgcPads[key].color = color;
+  btn.parentElement.querySelectorAll('.btn-color-dot').forEach(b => {
+    b.style.borderColor = 'transparent';
+  });
+  btn.style.borderColor = '#0284c7';
+}
+
+function salinPasienModalGC() {
+  if (!mgcPasienData) return;
+  document.getElementById('mgc_nama_pj').value = mgcPasienData.nm_pasien;
+  document.getElementById('mgc_hubungan_pj').value = 'Diri Sendiri';
+  document.getElementById('mgc_jk_pj').value = mgcPasienData.jk || 'L';
+  document.getElementById('mgc_umur_pj').value = mgcPasienData.umur || '';
+  document.getElementById('mgc_no_ktp_pj').value = mgcPasienData.no_ktp || '';
+  document.getElementById('mgc_no_telp_pj').value = mgcPasienData.no_tlp || '';
+  document.getElementById('mgc_alamat_pj').value = mgcPasienData.alamat || '';
+}
+
+function salinKeluargaModalGC() {
+  if (!mgcPasienData) return;
+  if (mgcPasienData.namakeluarga) document.getElementById('mgc_nama_pj').value = mgcPasienData.namakeluarga;
+  if (mgcPasienData.keluarga) {
+    const hub = document.getElementById('mgc_hubungan_pj');
+    for (let i = 0; i < hub.options.length; i++) {
+      if (hub.options[i].value.toLowerCase() === mgcPasienData.keluarga.toLowerCase()) {
+        hub.selectedIndex = i;
+        break;
+      }
+    }
+  }
+  if (mgcPasienData.alamatpj) document.getElementById('mgc_alamat_pj').value = mgcPasienData.alamatpj;
+  if (mgcPasienData.no_tlp) document.getElementById('mgc_no_telp_pj').value = mgcPasienData.no_tlp;
+}
+
+function simpanModalGeneralConsent(andPrint = false) {
+  const form = document.getElementById('formModalGC');
+  const btn = document.getElementById('mgc_btn_simpan');
+
+  if (mgcPads.pasien.hasContent && mgcPads.pasien.strokes.length > 0) {
+    document.getElementById('mgc_input_ttd_pasien').value = mgcPads.pasien.canvas.toDataURL('image/png');
+  }
+  if (mgcPads.petugas.hasContent && mgcPads.petugas.strokes.length > 0) {
+    document.getElementById('mgc_input_ttd_petugas').value = mgcPads.petugas.canvas.toDataURL('image/png');
+  }
+
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+
+  const fd = new FormData(form);
+  fd.append('action', 'simpan_general_consent');
+
+  fetch('<?= BASE_URL ?>modules/rekam_medis/ajax.php', {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: fd
+  })
+  .then(r => r.json())
+  .then(res => {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+
+    if (res.success) {
+      showToast(res.message, 'success');
+      document.getElementById('mgc_badge_status_saved').innerHTML = '<span style="background:#dcfce7;color:#15803d;font-size:12px;padding:4px 12px;border-radius:20px;font-weight:700;"><i class="fas fa-check-circle"></i> Sudah Ditandatangani</span>';
+      if (andPrint) {
+        cetakModalGeneralConsent();
+      }
+      setTimeout(() => {
+        tutupModalGeneralConsent();
+      }, 700);
+    } else {
+      alert(res.message || 'Gagal menyimpan General Consent');
+    }
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+    alert('Terjadi kesalahan koneksi: ' + err);
+  });
+}
+
+function cetakModalGeneralConsent() {
+  const noRawat = document.getElementById('mgc_no_rawat').value;
+  if (!noRawat) return;
+  window.open(`<?= BASE_URL ?>modules/rekam_medis/cetak_general_consent.php?no_rawat=${encodeURIComponent(noRawat)}`, '_blank');
+}
+</script>
+
 <?php include dirname(__DIR__, 2) . '/includes/footer.php'; ?>
+

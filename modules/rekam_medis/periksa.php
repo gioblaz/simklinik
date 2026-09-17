@@ -35,6 +35,10 @@ if (!$res || $res->num_rows === 0) {
 }
 $pasien = $res->fetch_assoc();
 
+// Check status General Consent
+$res_gc_check = $conn->query("SELECT no_rawat, ttd_pasien FROM surat_persetujuan_umum WHERE no_rawat = '$rawat_esc' LIMIT 1");
+$has_gc = ($res_gc_check && $res_gc_check->num_rows > 0);
+
 // ─── Auto-Trigger BPJS Antrean Task 4 (Dipanggil Non-Blocking via Background AJAX) ──
 require_once dirname(__DIR__, 2) . '/includes/bpjs_antrean.php';
 require_once dirname(__DIR__, 2) . '/includes/pcare_service.php';
@@ -407,6 +411,12 @@ include dirname(__DIR__, 2) . '/includes/header.php';
           <?= $pasien['no_rawat'] ?>
         </span>
         <?= badge_status($pasien['stts']) ?>
+        <a href="<?= BASE_URL ?>modules/rekam_medis/general_consent.php?no_rawat=<?= urlencode($no_rawat) ?>" target="_blank"
+           class="btn btn-sm <?= $has_gc ? 'btn-outline-success' : 'btn-outline-warning' ?>" 
+           style="padding:4px 10px;font-size:11.5px;display:inline-flex;align-items:center;gap:5px;font-weight:600;" 
+           title="<?= $has_gc ? 'General Consent Sudah Ditandatangani' : 'Isi & Tanda Tangani General Consent' ?>">
+          <i class="fas fa-file-signature"></i> General Consent <?= $has_gc ? '<i class="fas fa-check-circle text-success" style="font-size:10px;"></i>' : '' ?>
+        </a>
         <a href="<?= BASE_URL ?>modules/rekam_medis/cetak_resume.php?no_rawat=<?= urlencode($no_rawat) ?>" target="_blank"
            class="btn btn-sm btn-outline" style="padding:4px 10px;font-size:11.5px;display:inline-flex;align-items:center;gap:5px;border-color:#cbd5e1;color:#334155;" title="Cetak Ringkasan Medis">
           <i class="fas fa-print"></i> Cetak
@@ -425,46 +435,55 @@ include dirname(__DIR__, 2) . '/includes/header.php';
     <!-- ─── Left Column: Clinical Tabs (SOAP, Diagnosa, Tindakan, E-Resep) ─── -->
     <div>
       
-      <!-- ─── Tab Navigation Bar ─── -->
-      <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px 10px 0 0;padding:8px 12px;display:flex;align-items:center;gap:6px;border-bottom:none;flex-wrap:wrap;">
+      <!-- ─── Tab Navigation Bar (Animated Modern Header) ─── -->
+      <div class="clinical-tab-nav-bar">
         
         <!-- Tab 1: SOAP & Pemeriksaan Fisik -->
-        <button type="button" class="btn btn-sm clinical-tab-btn active" id="tab-btn-soap" onclick="switchClinicalTab('soap')"
-                style="display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:12px;padding:6px 12px;border-radius:7px;">
+        <button type="button" class="btn btn-sm clinical-tab-btn active" id="tab-btn-soap" onclick="switchClinicalTab('soap')">
           <i class="fas fa-stethoscope text-primary"></i>
           <span>1. Pemeriksaan & SOAP</span>
         </button>
 
         <!-- Tab 2: Diagnosa ICD-10 -->
-        <button type="button" class="btn btn-sm clinical-tab-btn btn-secondary" id="tab-btn-diagnosa" onclick="switchClinicalTab('diagnosa')"
-                style="display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:12px;padding:6px 12px;border-radius:7px;">
+        <button type="button" class="btn btn-sm clinical-tab-btn btn-secondary" id="tab-btn-diagnosa" onclick="switchClinicalTab('diagnosa')">
           <i class="fas fa-book-medical" style="color:#7c3aed;"></i>
           <span>2. Diagnosa ICD-10</span>
           <span class="badge badge-primary" style="font-size:10px;padding:1px 6px;border-radius:99px;"><?= count($diagnosa_list) ?></span>
         </button>
 
         <!-- Tab 3: Tindakan & Prosedur Medis -->
-        <button type="button" class="btn btn-sm clinical-tab-btn btn-secondary" id="tab-btn-tindakan" onclick="switchClinicalTab('tindakan')"
-                style="display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:12px;padding:6px 12px;border-radius:7px;">
+        <button type="button" class="btn btn-sm clinical-tab-btn btn-secondary" id="tab-btn-tindakan" onclick="switchClinicalTab('tindakan')">
           <i class="fas fa-hand-holding-medical" style="color:#db2777;"></i>
           <span>3. Tindakan & Prosedur</span>
           <span class="badge badge-warning" style="font-size:10px;padding:1px 6px;border-radius:99px;" id="badgeCountTindakan"><?= count($tindakan_list) ?></span>
         </button>
 
         <!-- Tab 4: Resep Obat Elektronik -->
-        <button type="button" class="btn btn-sm clinical-tab-btn btn-secondary" id="tab-btn-resep" onclick="switchClinicalTab('resep')"
-                style="display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:12px;padding:6px 12px;border-radius:7px;">
+        <button type="button" class="btn btn-sm clinical-tab-btn btn-secondary" id="tab-btn-resep" onclick="switchClinicalTab('resep')">
           <i class="fas fa-pills" style="color:#059669;"></i>
           <span>4. Resep Obat (E-Resep)</span>
           <span class="badge badge-success" style="font-size:10px;padding:1px 6px;border-radius:99px;" id="badgeCountResepTotal"><?= count($resep_list) + count($resep_racik_list) ?></span>
         </button>
 
         <!-- Tab 5: Permintaan & Hasil Lab -->
-        <button type="button" class="btn btn-sm clinical-tab-btn btn-secondary" id="tab-btn-lab" onclick="switchClinicalTab('lab')"
-                style="display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:12px;padding:6px 12px;border-radius:7px;">
+        <button type="button" class="btn btn-sm clinical-tab-btn btn-secondary" id="tab-btn-lab" onclick="switchClinicalTab('lab')">
           <i class="fas fa-flask-vial" style="color:#0284c7;"></i>
           <span>5. Permintaan Lab</span>
           <span class="badge badge-info" style="font-size:10px;padding:1px 6px;border-radius:99px;" id="badgeCountLab"><?= count($lab_req_list) ?></span>
+        </button>
+
+        <!-- Tab 6: Odontogram (Poli Gigi) -->
+        <button type="button" class="btn btn-sm clinical-tab-btn btn-secondary" id="tab-btn-odontogram" onclick="switchClinicalTab('odontogram')">
+          <i class="fas fa-tooth" style="color:#0284c7;"></i>
+          <span>6. Odontogram (Gigi)</span>
+          <span class="badge badge-info" style="font-size:10px;padding:1px 6px;border-radius:99px;" id="badgeCountOdontogram">Gigi</span>
+        </button>
+
+        <!-- Tab 7: KIA, Kebidanan & KMS Anak -->
+        <button type="button" class="btn btn-sm clinical-tab-btn btn-secondary" id="tab-btn-kia" onclick="switchClinicalTab('kia')">
+          <i class="fas fa-person-breastfeeding" style="color:#db2777;"></i>
+          <span>7. KIA, ANC & KMS Anak</span>
+          <span class="badge" style="font-size:10px;padding:1px 6px;border-radius:99px;background:#fce7f3;color:#be185d;" id="badgeCountKia">KIA</span>
         </button>
 
       </div>
@@ -1286,6 +1305,696 @@ include dirname(__DIR__, 2) . '/includes/header.php';
         </div>
       </div>
 
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <!-- TAB PANE 6: MODUL ODONTOGRAM (POLI GIGI & MULUT)        -->
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <div id="tab-pane-odontogram" class="clinical-tab-pane" style="display:none;">
+        <div class="card" style="border-radius:0 0 10px 10px;border-top:1px solid #bae6fd;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+          
+          <div class="card-header" style="background:linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #bae6fd;flex-wrap:wrap;gap:8px;">
+            <div class="card-title" style="font-size:13px;font-weight:700;color:#0369a1;display:flex;align-items:center;gap:8px;">
+              <i class="fas fa-tooth" style="font-size:15px;color:#0284c7;"></i>
+              <span>Rekam Medis Odontogram & Kesehatan Gigi (FDI System)</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <a href="<?= BASE_URL ?>modules/rekam_medis/cetak_odontogram.php?no_rawat=<?= urlencode($no_rawat) ?>" target="_blank" class="btn btn-xs" style="background:#0284c7;color:#fff;border-radius:6px;font-weight:600;padding:4px 10px;display:inline-flex;align-items:center;gap:4px;">
+                <i class="fas fa-print"></i> Cetak Odontogram
+              </a>
+              <button type="button" onclick="resetAllTeethToNormal()" class="btn btn-xs btn-outline-secondary" style="font-size:11px;padding:4px 8px;border-radius:6px;">
+                <i class="fas fa-undo"></i> Reset Gigi
+              </button>
+            </div>
+          </div>
+
+          <div class="card-body" style="padding:16px;">
+            
+            <!-- Tool Palette: Kondisi Klinis & Permukaan Gigi (Clean & Spacious Layout) -->
+            <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.03);">
+              
+              <!-- Toolbar Top Row: Title & Mode Permukaan Dropdown -->
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:12px;border-bottom:1px solid #f1f5f9;padding-bottom:10px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <div style="width:30px;height:30px;border-radius:8px;background:#e0f2fe;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-palette" style="color:#0284c7;font-size:14px;"></i>
+                  </div>
+                  <div>
+                    <div style="font-size:12.5px;font-weight:700;color:#0f172a;">1. Pilih Simbol Kondisi Klinis Gigi:</div>
+                    <div style="font-size:11px;color:#64748b;">Klik salah satu simbol di bawah, lalu klik pada permukaan bagan gigi</div>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:8px;background:#f8fafc;padding:5px 12px;border-radius:8px;border:1px solid #e2e8f0;">
+                  <label for="odontSurfaceMode" style="font-size:11.5px;font-weight:700;color:#334155;margin:0;display:flex;align-items:center;gap:5px;white-space:nowrap;">
+                    <i class="fas fa-bullseye" style="color:#0284c7;"></i> Mode Permukaan:
+                  </label>
+                  <select id="odontSurfaceMode" style="font-size:12px;font-weight:600;padding:4px 10px;height:32px;min-width:190px;border:1.5px solid #cbd5e1;border-radius:6px;background:#ffffff;color:#0f172a;cursor:pointer;outline:none;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+                    <option value="ALL" selected>Seluruh Gigi (ALL)</option>
+                    <option value="O">Oklusal / Insisal (O)</option>
+                    <option value="M">Mesial (M)</option>
+                    <option value="D">Distal (D)</option>
+                    <option value="B">Bukal / Labial (B)</option>
+                    <option value="L">Lingual / Palatal (L)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Badges Kondisi Klinis Grid -->
+              <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(170px, 1fr));gap:7px;" id="odontConditionPalette">
+                
+                <button type="button" class="btn btn-xs odont-palette-btn active" data-cond="Sou" onclick="selectOdontCondition('Sou', this)" style="background:#ffffff;color:#334155;border:1.5px solid #cbd5e1;font-weight:700;border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:8px;justify-content:flex-start;text-align:left;">
+                  <span style="width:14px;height:14px;border-radius:50%;background:#10b981;border:2px solid #fff;box-shadow:0 0 0 1px #10b981;display:inline-block;flex-shrink:0;"></span>
+                  <span><strong>Sou</strong> <span style="font-weight:500;font-size:10.5px;color:#64748b;">(Sehat / Normal)</span></span>
+                </button>
+
+                <button type="button" class="btn btn-xs odont-palette-btn" data-cond="Car" onclick="selectOdontCondition('Car', this)" style="background:#fff1f2;color:#be123c;border:1.5px solid #fecdd3;font-weight:700;border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:8px;justify-content:flex-start;text-align:left;">
+                  <span style="width:14px;height:14px;border-radius:50%;background:#ef4444;border:2px solid #fff;box-shadow:0 0 0 1px #ef4444;display:inline-block;flex-shrink:0;"></span>
+                  <span><strong>Car</strong> <span style="font-weight:500;font-size:10.5px;color:#9f1239;">(Karies / Lubang)</span></span>
+                </button>
+
+                <button type="button" class="btn btn-xs odont-palette-btn" data-cond="Amf" onclick="selectOdontCondition('Amf', this)" style="background:#f8fafc;color:#334155;border:1.5px solid #cbd5e1;font-weight:700;border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:8px;justify-content:flex-start;text-align:left;">
+                  <span style="width:14px;height:14px;border-radius:3px;background:#475569;border:2px solid #fff;box-shadow:0 0 0 1px #475569;display:inline-block;flex-shrink:0;"></span>
+                  <span><strong>Amf</strong> <span style="font-weight:500;font-size:10.5px;color:#64748b;">(Amalgam)</span></span>
+                </button>
+
+                <button type="button" class="btn btn-xs odont-palette-btn" data-cond="Gif" onclick="selectOdontCondition('Gif', this)" style="background:#f0fdf4;color:#15803d;border:1.5px solid #bbf7d0;font-weight:700;border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:8px;justify-content:flex-start;text-align:left;">
+                  <span style="width:14px;height:14px;border-radius:3px;background:#10b981;border:2px solid #fff;box-shadow:0 0 0 1px #10b981;display:inline-block;flex-shrink:0;"></span>
+                  <span><strong>Gif</strong> <span style="font-weight:500;font-size:10.5px;color:#166534;">(Komposit / GIC)</span></span>
+                </button>
+
+                <button type="button" class="btn btn-xs odont-palette-btn" data-cond="Mis" onclick="selectOdontCondition('Mis', this)" style="background:#0f172a;color:#ffffff;border:1.5px solid #0f172a;font-weight:700;border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:8px;justify-content:flex-start;text-align:left;">
+                  <i class="fas fa-times" style="color:#ef4444;font-size:13px;width:14px;text-align:center;"></i>
+                  <span><strong>Mis</strong> <span style="font-weight:500;font-size:10.5px;color:#cbd5e1;">(Hilang / Cabut)</span></span>
+                </button>
+
+                <button type="button" class="btn btn-xs odont-palette-btn" data-cond="Rad" onclick="selectOdontCondition('Rad', this)" style="background:#fffbeb;color:#b45309;border:1.5px solid #fde68a;font-weight:700;border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:8px;justify-content:flex-start;text-align:left;">
+                  <i class="fas fa-bolt" style="color:#d97706;font-size:13px;width:14px;text-align:center;"></i>
+                  <span><strong>Rad</strong> <span style="font-weight:500;font-size:10.5px;color:#92400e;">(Sisa Akar / Radix)</span></span>
+                </button>
+
+                <button type="button" class="btn btn-xs odont-palette-btn" data-cond="Cro" onclick="selectOdontCondition('Cro', this)" style="background:#eef2ff;color:#4338ca;border:1.5px solid #c7d2fe;font-weight:700;border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:8px;justify-content:flex-start;text-align:left;">
+                  <i class="fas fa-crown" style="color:#4f46e5;font-size:13px;width:14px;text-align:center;"></i>
+                  <span><strong>Cro</strong> <span style="font-weight:500;font-size:10.5px;color:#3730a3;">(Mahkota / Crown)</span></span>
+                </button>
+
+                <button type="button" class="btn btn-xs odont-palette-btn" data-cond="Bdr" onclick="selectOdontCondition('Bdr', this)" style="background:#ecfeff;color:#0e7490;border:1.5px solid #a5f3fc;font-weight:700;border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:8px;justify-content:flex-start;text-align:left;">
+                  <i class="fas fa-link" style="color:#0891b2;font-size:13px;width:14px;text-align:center;"></i>
+                  <span><strong>Bdr</strong> <span style="font-weight:500;font-size:10.5px;color:#155e75;">(Bridge / Jembatan)</span></span>
+                </button>
+
+                <button type="button" class="btn btn-xs odont-palette-btn" data-cond="Imp" onclick="selectOdontCondition('Imp', this)" style="background:#faf5ff;color:#7e22ce;border:1.5px solid #e9d5ff;font-weight:700;border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:8px;justify-content:flex-start;text-align:left;">
+                  <i class="fas fa-arrow-down" style="color:#7e22ce;font-size:13px;width:14px;text-align:center;"></i>
+                  <span><strong>Imp</strong> <span style="font-weight:500;font-size:10.5px;color:#6b21a8;">(Impaksi)</span></span>
+                </button>
+
+                <button type="button" class="btn btn-xs odont-palette-btn" data-cond="Abx" onclick="selectOdontCondition('Abx', this)" style="background:#fef2f2;color:#991b1b;border:1.5px solid #fecaca;font-weight:700;border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:8px;justify-content:flex-start;text-align:left;">
+                  <i class="fas fa-exclamation-triangle" style="color:#dc2626;font-size:13px;width:14px;text-align:center;"></i>
+                  <span><strong>Abx</strong> <span style="font-weight:500;font-size:10.5px;color:#7f1d1d;">(Abses)</span></span>
+                </button>
+
+                <button type="button" class="btn btn-xs odont-palette-btn" data-cond="Fis" onclick="selectOdontCondition('Fis', this)" style="background:#eff6ff;color:#1d4ed8;border:1.5px solid #bfdbfe;font-weight:700;border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:8px;justify-content:flex-start;text-align:left;">
+                  <i class="fas fa-shield-alt" style="color:#2563eb;font-size:13px;width:14px;text-align:center;"></i>
+                  <span><strong>Fis</strong> <span style="font-weight:500;font-size:10.5px;color:#1e40af;">(Fissure Sealant)</span></span>
+                </button>
+
+              </div>
+            </div>
+
+            <!-- Interactive FDI Teeth Chart Canvas/Grid -->
+            <div style="background:#ffffff;border:1px solid #cbd5e1;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.03);margin-bottom:16px;overflow-x:auto;">
+              
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;border-bottom:1px solid #f1f5f9;padding-bottom:4px;">
+                <span style="font-size:11px;font-weight:700;color:#0284c7;text-transform:uppercase;letter-spacing:0.5px;">
+                  <i class="fas fa-caret-up"></i> Rahang Atas (Maxilla) — Gigi Permanen
+                </span>
+                <span style="font-size:10px;color:#94a3b8;">Kuadran 1 (Kanan) | Kuadran 2 (Kiri)</span>
+              </div>
+
+              <!-- Upper Permanent Teeth (18..11 | 21..28) -->
+              <div style="display:flex;justify-content:center;gap:5px;margin-bottom:14px;overflow-x:auto;padding:4px 0;" id="odontRowUpperPerm">
+                <!-- Injected via JS -->
+              </div>
+
+              <!-- Deciduous / Gigi Susu (55..51 | 61..65 & 85..81 | 71..75) -->
+              <div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:10px;margin-bottom:14px;">
+                <div style="text-align:center;font-size:11px;font-weight:700;color:#0284c7;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">
+                  <i class="fas fa-baby" style="margin-right:4px;"></i> Gigi Susu Anak (Deciduous)
+                </div>
+                <div style="display:flex;justify-content:center;gap:4px;margin-bottom:6px;overflow-x:auto;padding:2px 0;" id="odontRowUpperDec">
+                  <!-- Injected via JS -->
+                </div>
+                <div style="display:flex;justify-content:center;gap:4px;overflow-x:auto;padding:2px 0;" id="odontRowLowerDec">
+                  <!-- Injected via JS -->
+                </div>
+              </div>
+
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;border-bottom:1px solid #f1f5f9;padding-bottom:4px;">
+                <span style="font-size:11px;font-weight:700;color:#0284c7;text-transform:uppercase;letter-spacing:0.5px;">
+                  <i class="fas fa-caret-down"></i> Rahang Bawah (Mandibula) — Gigi Permanen
+                </span>
+                <span style="font-size:10px;color:#94a3b8;">Kuadran 4 (Kanan) | Kuadran 3 (Kiri)</span>
+              </div>
+
+              <!-- Lower Permanent Teeth (48..41 | 31..38) -->
+              <div style="display:flex;justify-content:center;gap:5px;overflow-x:auto;padding:4px 0;" id="odontRowLowerPerm">
+                <!-- Injected via JS -->
+              </div>
+
+            </div>
+
+            <!-- Ringkasan Statistik DMF-T & OHIS Index -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:12px;margin-bottom:16px;">
+              
+              <!-- DMF-T Card -->
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;">
+                <div style="font-size:11.5px;font-weight:700;color:#166534;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
+                  <span><i class="fas fa-calculator"></i> Indeks DMF-T</span>
+                  <span class="badge" style="background:#166534;color:#fff;" id="badgeDmftTotal">Total: 0</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:#166534;">
+                  <div><strong>D (Decay):</strong> <span id="valD">0</span></div>
+                  <div><strong>M (Missing):</strong> <span id="valM">0</span></div>
+                  <div><strong>F (Filled):</strong> <span id="valF">0</span></div>
+                </div>
+              </div>
+
+              <!-- OHIS Card -->
+              <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;">
+                <div style="font-size:11.5px;font-weight:700;color:#1e40af;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
+                  <span><i class="fas fa-broom"></i> Indeks Kebersihan Mulut (OHIS)</span>
+                  <span class="badge" style="background:#1e40af;color:#fff;" id="badgeOhisKriteria">Baik</span>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;">
+                  <div>
+                    <label style="font-size:10px;color:#475569;margin-bottom:2px;display:block;">Debris Index (DI):</label>
+                    <input type="number" step="0.1" id="inputOhisDebris" class="form-control" value="0.0" onchange="calculateOhisScore()" style="font-size:11px;padding:2px 6px;height:24px;">
+                  </div>
+                  <div>
+                    <label style="font-size:10px;color:#475569;margin-bottom:2px;display:block;">Calculus Index (CI):</label>
+                    <input type="number" step="0.1" id="inputOhisCalculus" class="form-control" value="0.0" onchange="calculateOhisScore()" style="font-size:11px;padding:2px 6px;height:24px;">
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Form Pemeriksaan Klinis Gigi Khusus -->
+            <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:16px;">
+              <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                <i class="fas fa-clipboard-check text-primary"></i>
+                <span>2. Pemeriksaan Jaringan Lunak & Oklusi</span>
+              </div>
+
+              <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:10px;font-size:11.5px;">
+                <div>
+                  <label style="font-weight:600;color:#475569;margin-bottom:3px;display:block;">Oklusi</label>
+                  <select id="odontOklusi" class="form-control" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                    <option value="Normal">Normal</option>
+                    <option value="Crossbite">Crossbite</option>
+                    <option value="Steepbite">Steepbite</option>
+                    <option value="Openbite">Openbite</option>
+                    <option value="Lainnya">Lainnya</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-weight:600;color:#475569;margin-bottom:3px;display:block;">Torus Palatinus</label>
+                  <select id="odontTorusPalatinus" class="form-control" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                    <option value="Tidak Ada">Tidak Ada</option>
+                    <option value="Kecil">Kecil</option>
+                    <option value="Sedang">Sedang</option>
+                    <option value="Besar">Besar</option>
+                    <option value="Multiple">Multiple</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-weight:600;color:#475569;margin-bottom:3px;display:block;">Torus Mandibularis</label>
+                  <select id="odontTorusMandibularis" class="form-control" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                    <option value="Tidak Ada">Tidak Ada</option>
+                    <option value="Sisi Kiri">Sisi Kiri</option>
+                    <option value="Sisi Kanan">Sisi Kanan</option>
+                    <option value="Kedua Sisi">Kedua Sisi</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-weight:600;color:#475569;margin-bottom:3px;display:block;">Palatum</label>
+                  <select id="odontPalatum" class="form-control" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                    <option value="Dalam">Dalam</option>
+                    <option value="Sedang" selected>Sedang</option>
+                    <option value="Rendah">Rendah</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-weight:600;color:#475569;margin-bottom:3px;display:block;">Diastema</label>
+                  <input type="text" id="odontDiastema" class="form-control" placeholder="cth: Gigi 11-21 (2mm)" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                </div>
+                <div>
+                  <label style="font-weight:600;color:#475569;margin-bottom:3px;display:block;">Gigi Anomali</label>
+                  <input type="text" id="odontGigiAnomali" class="form-control" placeholder="cth: Microdontia 12" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                </div>
+              </div>
+
+              <div style="margin-top:10px;">
+                <label style="font-weight:600;color:#475569;margin-bottom:3px;display:block;font-size:11.5px;">Catatan Tambahan & Rencana Perawatan Gigi</label>
+                <textarea id="odontLainLain" class="form-control" rows="2" placeholder="Catatan kelainan gingiva, rencana tambal / scaling / prosto..." style="font-size:11.5px;padding:6px 8px;"></textarea>
+              </div>
+
+            </div>
+
+            <!-- Tombol Simpan Odontogram -->
+            <div style="display:flex;justify-content:flex-end;gap:8px;">
+              <button type="button" onclick="saveOdontogramData()" class="btn btn-primary" style="font-weight:700;font-size:12.5px;padding:8px 18px;display:inline-flex;align-items:center;gap:6px;">
+                <i class="fas fa-save"></i> Simpan Odontogram & Pemeriksaan Gigi
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <!-- TAB PANE 7: MODUL KIA (ANC, KMS ANAK, IMUNISASI & KB)   -->
+      <!-- ═══════════════════════════════════════════════════════ -->
+      <div id="tab-pane-kia" class="clinical-tab-pane" style="display:none;">
+        <div class="card" style="border-radius:0 0 10px 10px;border-top:1px solid #fbcfe8;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+          
+          <div class="card-header" style="background:linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #fbcfe8;flex-wrap:wrap;gap:8px;">
+            <div class="card-title" style="font-size:13px;font-weight:700;color:#be185d;display:flex;align-items:center;gap:8px;">
+              <i class="fas fa-person-breastfeeding" style="font-size:15px;color:#db2777;"></i>
+              <span>Rekam Medis Kesehatan Ibu & Anak (KIA / Kebidanan & KMS)</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <a href="<?= BASE_URL ?>modules/rekam_medis/cetak_kia.php?no_rawat=<?= urlencode($no_rawat) ?>&tipe=anc" target="_blank" class="btn btn-xs" style="background:#db2777;color:#fff;border-radius:6px;font-weight:600;padding:4px 10px;display:inline-flex;align-items:center;gap:4px;">
+                <i class="fas fa-print"></i> Cetak Lembar KIA
+              </a>
+            </div>
+          </div>
+
+          <div class="card-body" style="padding:16px;">
+            
+            <!-- Sub-Tab Navigasi KIA -->
+            <div style="display:flex;gap:6px;margin-bottom:16px;border-bottom:2px solid #f1f5f9;padding-bottom:8px;flex-wrap:wrap;">
+              <button type="button" class="btn btn-sm kia-subtab-btn active" id="kia-sub-btn-anc" onclick="switchKiaSubTab('anc')" style="font-size:11.5px;font-weight:700;padding:5px 12px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;">
+                <i class="fas fa-person-pregnant" style="color:#db2777;"></i>
+                <span>A. ANC (Ibu Hamil)</span>
+              </button>
+              <button type="button" class="btn btn-sm kia-subtab-btn btn-secondary" id="kia-sub-btn-kms" onclick="switchKiaSubTab('kms')" style="font-size:11.5px;font-weight:700;padding:5px 12px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;">
+                <i class="fas fa-baby" style="color:#059669;"></i>
+                <span>B. KMS & Tumbuh Kembang</span>
+              </button>
+              <button type="button" class="btn btn-sm kia-subtab-btn btn-secondary" id="kia-sub-btn-imunisasi" onclick="switchKiaSubTab('imunisasi')" style="font-size:11.5px;font-weight:700;padding:5px 12px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;">
+                <i class="fas fa-syringe" style="color:#0284c7;"></i>
+                <span>C. Imunisasi Dasar Anak</span>
+              </button>
+              <button type="button" class="btn btn-sm kia-subtab-btn btn-secondary" id="kia-sub-btn-kb" onclick="switchKiaSubTab('kb')" style="font-size:11.5px;font-weight:700;padding:5px 12px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;">
+                <i class="fas fa-venus-mars" style="color:#7c3aed;"></i>
+                <span>D. Pelayanan KB</span>
+              </button>
+            </div>
+
+            <!-- ─── SUB-TAB A: ANC (ANTENATAL CARE IBU HAMIL) ─── -->
+            <div id="kia-sub-pane-anc" class="kia-subtab-pane" style="display:block;">
+              
+              <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;padding:12px;margin-bottom:14px;">
+                <div style="font-size:12px;font-weight:700;color:#9f1239;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                  <i class="fas fa-calculator"></i>
+                  <span>1. Riwayat Obstetri & Kalkulator Kehamilan Cerdas (Naegele)</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:8px;font-size:11.5px;">
+                  <div>
+                    <label style="font-weight:600;color:#881337;margin-bottom:2px;display:block;">Gravida (G)</label>
+                    <input type="number" id="ancG" class="form-control" value="1" min="1" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#881337;margin-bottom:2px;display:block;">Partus (P)</label>
+                    <input type="number" id="ancP" class="form-control" value="0" min="0" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#881337;margin-bottom:2px;display:block;">Abortus (A)</label>
+                    <input type="number" id="ancA" class="form-control" value="0" min="0" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#881337;margin-bottom:2px;display:block;">Anak Hidup (H)</label>
+                    <input type="number" id="ancH" class="form-control" value="0" min="0" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#881337;margin-bottom:2px;display:block;">HPHT</label>
+                    <input type="date" id="ancHPHT" class="form-control" onchange="calculateNaegeleHPL()" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#881337;margin-bottom:2px;display:block;">HPL (Taksiran Lahir)</label>
+                    <input type="date" id="ancHPL" class="form-control" style="font-size:11.5px;padding:3px 6px;height:28px;background:#fef2f2;font-weight:700;color:#991b1b;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#881337;margin-bottom:2px;display:block;">Usia Kehamilan</label>
+                    <input type="text" id="ancUsiaKehamilan" class="form-control" placeholder="cth: 24 Minggu 3 Hari" style="font-size:11.5px;padding:3px 6px;height:28px;background:#fef2f2;font-weight:700;color:#991b1b;">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Parameter Klinis ANC -->
+              <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:14px;">
+                <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                  <i class="fas fa-stethoscope text-primary"></i>
+                  <span>2. Pemeriksaan Fisik & Palpasi Leopold</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));gap:10px;font-size:11.5px;">
+                  <div>
+                    <label style="font-weight:600;color:#475569;margin-bottom:2px;display:block;">TFU (cm)</label>
+                    <input type="text" id="ancTFU" class="form-control" placeholder="cth: 22 cm" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#475569;margin-bottom:2px;display:block;">Denyut Jantung Janin (DJJ)</label>
+                    <div style="display:flex;align-items:center;gap:4px;">
+                      <input type="text" id="ancDJJ" class="form-control" placeholder="cth: 140 dpm" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                      <span style="font-size:10px;color:#059669;white-space:nowrap;">(120-160 dpm)</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#475569;margin-bottom:2px;display:block;">Letak / Presentasi Janin</label>
+                    <select id="ancLetakJanin" class="form-control" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                      <option value="Kepala">Kepala (Vertex)</option>
+                      <option value="Sungsang / Bokong">Sungsang / Bokong</option>
+                      <option value="Melintang">Melintang (Transverse)</option>
+                      <option value="Oblik">Oblik</option>
+                      <option value="Belum Teraba">Belum Teraba</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#475569;margin-bottom:2px;display:block;">Edema Ekstremitas</label>
+                    <select id="ancEdema" class="form-control" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                      <option value="Tidak">Tidak Ada</option>
+                      <option value="+">+ (Ringan)</option>
+                      <option value="++">++ (Sedang)</option>
+                      <option value="+++">+++ (Berat)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#475569;margin-bottom:2px;display:block;">Refleks Patella</label>
+                    <select id="ancReflPatella" class="form-control" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                      <option value="+">+ / Positif (Normal)</option>
+                      <option value="-">- / Negatif</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#475569;margin-bottom:2px;display:block;">Skor KSPR & Tingkat Risiko</label>
+                    <div style="display:flex;align-items:center;gap:4px;">
+                      <input type="number" id="ancSkorKspr" class="form-control" value="2" min="2" onchange="evaluateKsprRisk()" style="font-size:11.5px;padding:4px 6px;height:30px;width:55px;">
+                      <select id="ancResikoKehamilan" class="form-control" style="font-size:11px;padding:4px 6px;height:30px;">
+                        <option value="KRR (Rendah)">KRR (Rendah)</option>
+                        <option value="KRT (Tinggi)">KRT (Tinggi)</option>
+                        <option value="KRST (Sangat Tinggi)">KRST (Sangat Tinggi)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Palpasi Leopold 1-4 -->
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:8px;margin-top:10px;font-size:11px;">
+                  <div>
+                    <label style="font-weight:600;color:#475569;display:block;">Leopold I (Fundus):</label>
+                    <input type="text" id="ancLeopold1" class="form-control" placeholder="Tinggi fundus & bagian di fundus" style="font-size:11px;padding:3px 6px;height:26px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#475569;display:block;">Leopold II (Samping):</label>
+                    <input type="text" id="ancLeopold2" class="form-control" placeholder="Punggung kanan/kiri & ekstremitas" style="font-size:11px;padding:3px 6px;height:26px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#475569;display:block;">Leopold III (Bawah):</label>
+                    <input type="text" id="ancLeopold3" class="form-control" placeholder="Bagian terbawah janin (kepala/bokong)" style="font-size:11px;padding:3px 6px;height:26px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#475569;display:block;">Leopold IV (Masuk PAP):</label>
+                    <input type="text" id="ancLeopold4" class="form-control" placeholder="Konvergen / Divergen" style="font-size:11px;padding:3px 6px;height:26px;">
+                  </div>
+                </div>
+
+                <div style="margin-top:10px;">
+                  <label style="font-weight:600;color:#475569;margin-bottom:3px;display:block;font-size:11.5px;">Tindakan, Pemberian Tablet Fe & Kalsium</label>
+                  <input type="text" id="ancTindakanKia" class="form-control" placeholder="cth: Fe 30 tab, Kalsium Laktat, Edukasi Tanda Bahaya Kehamilan" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                </div>
+
+                <div style="margin-top:8px;">
+                  <label style="font-weight:600;color:#475569;margin-bottom:3px;display:block;font-size:11.5px;">Saran & Edukasi Bidan / Dokter</label>
+                  <textarea id="ancSaranNasehat" class="form-control" rows="2" placeholder="Anjuran nutrisi, pola istirahat, tanda persalinan..." style="font-size:11.5px;padding:6px 8px;"></textarea>
+                </div>
+
+              </div>
+
+              <div style="display:flex;justify-content:flex-end;">
+                <button type="button" onclick="saveKiaAncData()" class="btn btn-primary" style="background:#db2777;border-color:#db2777;font-weight:700;font-size:12px;padding:7px 18px;display:inline-flex;align-items:center;gap:6px;">
+                  <i class="fas fa-save"></i> Simpan Pemeriksaan ANC
+                </button>
+              </div>
+
+            </div>
+
+            <!-- ─── SUB-TAB B: KMS & TUMBUH KEMBANG ANAK ─── -->
+            <div id="kia-sub-pane-kms" class="kia-subtab-pane" style="display:none;">
+              
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:14px;">
+                <div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                  <i class="fas fa-weight-scale"></i>
+                  <span>1. Pengukuran Antropometri & Evaluasi Status Gizi Standar WHO</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:8px;font-size:11.5px;">
+                  <div>
+                    <label style="font-weight:600;color:#166534;margin-bottom:2px;display:block;">Umur (Bulan)</label>
+                    <input type="number" id="kmsUmurBln" class="form-control" value="0" min="0" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#166534;margin-bottom:2px;display:block;">Berat Badan (kg)</label>
+                    <input type="number" step="0.05" id="kmsBB" class="form-control" placeholder="cth: 7.2" onchange="evaluateChildNutrition()" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#166534;margin-bottom:2px;display:block;">Tinggi / PB (cm)</label>
+                    <input type="number" step="0.5" id="kmsTB" class="form-control" placeholder="cth: 68" onchange="evaluateChildNutrition()" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#166534;margin-bottom:2px;display:block;">Lingkar Kepala (cm)</label>
+                    <input type="number" step="0.1" id="kmsLK" class="form-control" placeholder="cth: 42" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#166534;margin-bottom:2px;display:block;">LiLA (cm)</label>
+                    <input type="number" step="0.1" id="kmsLiLA" class="form-control" placeholder="cth: 13.5" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#166534;margin-bottom:2px;display:block;">Status Gizi (BB/U)</label>
+                    <select id="kmsStatusGiziBBU" class="form-control" style="font-size:11px;padding:3px 6px;height:28px;font-weight:700;color:#166534;">
+                      <option value="Gizi Baik (Normal)">Gizi Baik (Normal)</option>
+                      <option value="Gizi Kurang">Gizi Kurang</option>
+                      <option value="Gizi Buruk">Gizi Buruk</option>
+                      <option value="Berisiko Gizi Lebih">Berisiko Gizi Lebih</option>
+                      <option value="Gizi Lebih">Gizi Lebih</option>
+                      <option value="Obesitas">Obesitas</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Nutrisi & Perkembangan -->
+              <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:14px;font-size:11.5px;">
+                <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+                  <i class="fas fa-apple-whole text-success"></i>
+                  <span>2. Suplementasi Gizi & Motorik</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));gap:10px;">
+                  <div>
+                    <label style="font-weight:600;color:#475569;margin-bottom:2px;display:block;">ASI Eksklusif (0-6 Bln)</label>
+                    <select id="kmsAsiEksklusif" class="form-control" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                      <option value="Ya">Ya</option>
+                      <option value="Tidak">Tidak</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#475569;margin-bottom:2px;display:block;">Vitamin A</label>
+                    <select id="kmsVitA" class="form-control" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                      <option value="Tidak">Tidak Diberikan</option>
+                      <option value="Ya - Kapsul Biru (100.000 IU)">Ya - Kapsul Biru (6-11 bln)</option>
+                      <option value="Ya - Kapsul Merah (200.000 IU)">Ya - Kapsul Merah (12-59 bln)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#475569;margin-bottom:2px;display:block;">Obat Cacing</label>
+                    <select id="kmsObatCacing" class="form-control" style="font-size:11.5px;padding:4px 8px;height:30px;">
+                      <option value="Tidak">Tidak Diberikan</option>
+                      <option value="Ya">Ya Diberikan</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style="margin-top:10px;">
+                  <label style="font-weight:600;color:#475569;margin-bottom:3px;display:block;">Perkembangan Motorik & Tumbuh Kembang</label>
+                  <textarea id="kmsPerkembanganMotorik" class="form-control" rows="2" placeholder="Bisa menegakkan kepala, berguling, duduk mandiri, merangkak..." style="font-size:11.5px;padding:6px 8px;"></textarea>
+                </div>
+              </div>
+
+              <div style="display:flex;justify-content:flex-end;">
+                <button type="button" onclick="saveKiaKmsData()" class="btn btn-primary" style="background:#059669;border-color:#059669;font-weight:700;font-size:12px;padding:7px 18px;display:inline-flex;align-items:center;gap:6px;">
+                  <i class="fas fa-save"></i> Simpan Data KMS Anak
+                </button>
+              </div>
+
+            </div>
+
+            <!-- ─── SUB-TAB C: IMUNISASI DASAR ANAK ─── -->
+            <div id="kia-sub-pane-imunisasi" class="kia-subtab-pane" style="display:none;">
+              
+              <!-- Form Tambah Vaksin -->
+              <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:14px;">
+                <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                  <i class="fas fa-plus-circle"></i>
+                  <span>Input Pelayanan Imunisasi Anak</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));gap:8px;font-size:11.5px;">
+                  <div>
+                    <label style="font-weight:600;color:#1e40af;margin-bottom:2px;display:block;">Tanggal Imunisasi</label>
+                    <input type="date" id="imunTgl" class="form-control" value="<?= date('Y-m-d') ?>" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                  <div style="grid-column: span 2;">
+                    <label style="font-weight:600;color:#1e40af;margin-bottom:2px;display:block;">Jenis Vaksin / Imunisasi</label>
+                    <select id="imunJenis" class="form-control" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                      <option value="">-- Pilih Jenis Imunisasi --</option>
+                      <option value="Hepatitis B0 (HB-0) 0-24 Jam">Hepatitis B0 (HB-0) 0-24 Jam</option>
+                      <option value="BCG (Bulan 1)">BCG (Bulan 1)</option>
+                      <option value="Polio 1 (Tetes) Bulan 1">Polio 1 (Tetes) Bulan 1</option>
+                      <option value="DPT-HB-Hib 1 (Bulan 2)">DPT-HB-Hib 1 (Bulan 2)</option>
+                      <option value="Polio 2 (Tetes) Bulan 2">Polio 2 (Tetes) Bulan 2</option>
+                      <option value="PCV 1 (Bulan 2)">PCV 1 (Bulan 2)</option>
+                      <option value="Rotavirus 1 (Bulan 2)">Rotavirus 1 (Bulan 2)</option>
+                      <option value="DPT-HB-Hib 2 (Bulan 3)">DPT-HB-Hib 2 (Bulan 3)</option>
+                      <option value="Polio 3 (Tetes) Bulan 3">Polio 3 (Tetes) Bulan 3</option>
+                      <option value="PCV 2 (Bulan 3)">PCV 2 (Bulan 3)</option>
+                      <option value="Rotavirus 2 (Bulan 3)">Rotavirus 2 (Bulan 3)</option>
+                      <option value="DPT-HB-Hib 3 (Bulan 4)">DPT-HB-Hib 3 (Bulan 4)</option>
+                      <option value="Polio 4 (Tetes) Bulan 4">Polio 4 (Tetes) Bulan 4</option>
+                      <option value="IPV 1 (Suntik) Bulan 4">IPV 1 (Suntik) Bulan 4</option>
+                      <option value="Rotavirus 3 (Bulan 4)">Rotavirus 3 (Bulan 4)</option>
+                      <option value="Campak-Rubella (MR 1) Bulan 9">Campak-Rubella (MR 1) Bulan 9</option>
+                      <option value="IPV 2 (Suntik) Bulan 9">IPV 2 (Suntik) Bulan 9</option>
+                      <option value="PCV 3 (Bulan 12)">PCV 3 (Bulan 12)</option>
+                      <option value="DPT-HB-Hib Lanjutan (Bulan 18)">DPT-HB-Hib Lanjutan (Bulan 18)</option>
+                      <option value="Campak-Rubella (MR 2) Bulan 18">Campak-Rubella (MR 2) Bulan 18</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#1e40af;margin-bottom:2px;display:block;">No. Batch Vaksin</label>
+                    <input type="text" id="imunBatch" class="form-control" placeholder="cth: B2026-A" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#1e40af;margin-bottom:2px;display:block;">Keterangan</label>
+                    <input type="text" id="imunKet" class="form-control" placeholder="cth: Paha kanan, tidak rewel" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                </div>
+                <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+                  <button type="button" onclick="addImunisasiItem()" class="btn btn-primary" style="background:#0284c7;border-color:#0284c7;font-weight:700;font-size:11.5px;padding:5px 14px;display:inline-flex;align-items:center;gap:4px;">
+                    <i class="fas fa-plus"></i> Tambah Imunisasi
+                  </button>
+                </div>
+              </div>
+
+              <!-- Tabel Riwayat Imunisasi Anak -->
+              <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+                <div style="padding:8px 12px;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:12px;font-weight:700;color:#334155;">
+                  <i class="fas fa-history text-primary"></i> Riwayat Imunisasi Yang Pernah Diterima Pasien Ini
+                </div>
+                <table class="table table-bordered mb-0" style="font-size:11.5px;margin:0;">
+                  <thead style="background:#f1f5f9;">
+                    <tr>
+                      <th style="width:5%;text-align:center;">#</th>
+                      <th style="width:20%;">Tanggal</th>
+                      <th style="width:35%;">Jenis Vaksin</th>
+                      <th style="width:15%;">No. Batch</th>
+                      <th style="width:15%;">Petugas</th>
+                      <th style="width:10%;text-align:center;">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tableBodyImunisasi">
+                    <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:14px;">Memuat data imunisasi...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+
+            <!-- ─── SUB-TAB D: PELAYANAN KB ─── -->
+            <div id="kia-sub-pane-kb" class="kia-subtab-pane" style="display:none;">
+              
+              <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:12px;margin-bottom:14px;">
+                <div style="font-size:12px;font-weight:700;color:#6b21a8;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                  <i class="fas fa-venus-mars"></i>
+                  <span>Pelayanan Kontrasepsi / KB</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));gap:8px;font-size:11.5px;">
+                  <div>
+                    <label style="font-weight:600;color:#6b21a8;margin-bottom:2px;display:block;">Tanggal Pelayanan</label>
+                    <input type="date" id="kbTgl" class="form-control" value="<?= date('Y-m-d') ?>" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#6b21a8;margin-bottom:2px;display:block;">Jenis Kontrasepsi / KB</label>
+                    <select id="kbJenis" class="form-control" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                      <option value="Suntik 1 Bulan">Suntik 1 Bulan (Kombinasi)</option>
+                      <option value="Suntik 3 Bulan (Depo)">Suntik 3 Bulan (Depo Progestin)</option>
+                      <option value="Pil KB Kombinasi">Pil KB Kombinasi</option>
+                      <option value="Pil KB Progestin (Minipil)">Pil KB Progestin (Minipil / Ibu Menyusui)</option>
+                      <option value="IUD / AKDR (Copper-T)">IUD / AKDR (Copper-T)</option>
+                      <option value="Implan 2 Batang">Implan 2 Batang</option>
+                      <option value="Kondom">Kondom</option>
+                      <option value="MOW / Steril Wanita">MOW / Tubektomi</option>
+                      <option value="MOP / Vasektomi">MOP / Vasektomi</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#6b21a8;margin-bottom:2px;display:block;">Tgl Kembali / Kunjungan Ulang</label>
+                    <input type="date" id="kbTglKembali" class="form-control" style="font-size:11.5px;padding:3px 6px;height:28px;">
+                  </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;font-size:11px;">
+                  <div>
+                    <label style="font-weight:600;color:#6b21a8;display:block;">Keluhan / Alasan KB:</label>
+                    <input type="text" id="kbKeluhan" class="form-control" placeholder="cth: Ingin menjarangkan kehamilan" style="font-size:11px;padding:3px 6px;height:26px;">
+                  </div>
+                  <div>
+                    <label style="font-weight:600;color:#6b21a8;display:block;">Efek Samping / Riwayat:</label>
+                    <input type="text" id="kbEfekSamping" class="form-control" placeholder="cth: Flek ringan, TD stabil" style="font-size:11px;padding:3px 6px;height:26px;">
+                  </div>
+                </div>
+
+                <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+                  <button type="button" onclick="saveKiaKbData()" class="btn btn-primary" style="background:#7c3aed;border-color:#7c3aed;font-weight:700;font-size:11.5px;padding:5px 14px;display:inline-flex;align-items:center;gap:4px;">
+                    <i class="fas fa-save"></i> Simpan Pelayanan KB
+                  </button>
+                </div>
+              </div>
+
+              <!-- Tabel Riwayat Pelayanan KB -->
+              <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+                <div style="padding:8px 12px;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:12px;font-weight:700;color:#334155;">
+                  <i class="fas fa-history text-primary"></i> Riwayat Pelayanan KB Pasien Ini
+                </div>
+                <table class="table table-bordered mb-0" style="font-size:11.5px;margin:0;">
+                  <thead style="background:#f1f5f9;">
+                    <tr>
+                      <th style="width:5%;text-align:center;">#</th>
+                      <th style="width:20%;">Tanggal</th>
+                      <th style="width:30%;">Metode Kontrasepsi</th>
+                      <th style="width:20%;">Tgl Kembali</th>
+                      <th style="width:25%;">Petugas</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tableBodyKb">
+                    <tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:14px;">Memuat riwayat KB...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
     </div><!-- /.left column -->
 
     <!-- ─── Right Column: Actions & Riwayat Medis ──────────── -->
@@ -1397,9 +2106,20 @@ include dirname(__DIR__, 2) . '/includes/header.php';
 </form>
 
 <script>
-// ─── Tab Switching Logic ──────────────────────────────────────
+// ─── Tab Switching Logic with Dynamic Animation & Ripple ──────
+function createTabClickRipple(btn) {
+  if (!btn) return;
+  const ripple = document.createElement('span');
+  ripple.className = 'tab-ripple-effect';
+  btn.appendChild(ripple);
+  setTimeout(() => { if (ripple.parentNode) ripple.parentNode.removeChild(ripple); }, 650);
+}
+
 function switchClinicalTab(tabName) {
-  document.querySelectorAll('.clinical-tab-pane').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.clinical-tab-pane').forEach(el => {
+    el.style.display = 'none';
+    el.classList.remove('clinical-tab-pane-animate');
+  });
   document.querySelectorAll('.clinical-tab-btn').forEach(el => {
     el.classList.remove('active');
     el.classList.add('btn-secondary');
@@ -1408,20 +2128,53 @@ function switchClinicalTab(tabName) {
   const activePane = document.getElementById('tab-pane-' + tabName);
   const activeBtn  = document.getElementById('tab-btn-' + tabName);
 
-  if (activePane) activePane.style.display = 'block';
+  if (activePane) {
+    activePane.style.display = 'block';
+    // Trigger smooth fade-slide entrance animation
+    void activePane.offsetWidth;
+    activePane.classList.add('clinical-tab-pane-animate');
+  }
   if (activeBtn) {
     activeBtn.classList.remove('btn-secondary');
     activeBtn.classList.add('active');
+    createTabClickRipple(activeBtn);
+  }
+
+  if (tabName === 'odontogram') {
+    const perm = document.getElementById('odontRowUpperPerm');
+    if (perm && perm.children.length === 0) {
+      if (typeof initOdontogramChart === 'function') initOdontogramChart();
+      if (typeof loadOdontogramData === 'function') loadOdontogramData();
+    }
   }
 
   localStorage.setItem('periksa_active_tab', tabName);
 }
 
+
 // Restore last tab on load & trigger Task 4 in background
 document.addEventListener('DOMContentLoaded', () => {
-  const lastTab = localStorage.getItem('periksa_active_tab') || 'soap';
-  switchClinicalTab(lastTab);
+  const poliCode = '<?= $pasien['kd_poli'] ?? '' ?>';
+  let defaultTab = localStorage.getItem('periksa_active_tab');
+  if (!defaultTab) {
+    if (poliCode === 'GIG' || poliCode === 'POL02') {
+      defaultTab = 'odontogram';
+    } else if (['KIA', 'POL04', 'ANA', 'POL05'].includes(poliCode)) {
+      defaultTab = 'kia';
+    } else {
+      defaultTab = 'soap';
+    }
+  }
+  switchClinicalTab(defaultTab);
   calcBmi();
+
+  // Inisialisasi Modul Odontogram & KIA
+  initOdontogramChart();
+  loadOdontogramData();
+  loadKiaAncData();
+  loadKiaKmsData();
+  loadKiaImunisasi();
+  loadKiaKb();
 
   // Non-blocking trigger BPJS Task 4 di background tanpa memperlambat loading halaman
   fetch('ajax.php?action=trigger_task4&no_rawat=' + encodeURIComponent('<?= $rawat_esc ?>'), {
@@ -3245,6 +3998,730 @@ function simpanEditItemResep() {
     showToast('Gagal menghubungi server', 'danger');
   });
 }
+
+// ═════════════════════════════════════════════════════════════
+// ─── MODUL ODONTOGRAM JAVASCRIPT LOGIC ────────────────────────
+// ═════════════════════════════════════════════════════════════
+
+let selectedOdontCondition = 'Sou';
+let odontTeethState = {}; // { '18_ALL': { no_gigi: '18', posisi: 'ALL', kondisi: 'Sou' }, ... }
+
+const ODONT_COLORS = {
+  Sou: '#ffffff',
+  Car: '#ef4444',
+  Amf: '#475569',
+  Gif: '#10b981',
+  Mis: '#0f172a',
+  Rad: '#f59e0b',
+  Cro: '#6366f1',
+  Bdr: '#06b6d4',
+  Imp: '#a855f7',
+  Abx: '#dc2626',
+  Fis: '#3b82f6'
+};
+
+function selectOdontCondition(cond, btn) {
+  selectedOdontCondition = cond;
+  document.querySelectorAll('.odont-palette-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+function initOdontogramChart() {
+  const upperPerm = [18,17,16,15,14,13,12,11, 21,22,23,24,25,26,27,28];
+  const upperDec  = [55,54,53,52,51, 61,62,63,64,65];
+  const lowerDec  = [85,84,83,82,81, 71,72,73,74,75];
+  const lowerPerm = [48,47,46,45,44,43,42,41, 31,32,33,34,35,36,37,38];
+
+  renderTeethRow('odontRowUpperPerm', upperPerm, true, false);
+  renderTeethRow('odontRowUpperDec', upperDec, true, true);
+  renderTeethRow('odontRowLowerDec', lowerDec, false, true);
+  renderTeethRow('odontRowLowerPerm', lowerPerm, false, false);
+}
+
+function renderTeethRow(containerId, teethArr, isUpper, isDeciduous) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+
+  const mid = isDeciduous ? 5 : 8;
+  teethArr.forEach((t, idx) => {
+    if (idx === mid) {
+      const sep = document.createElement('div');
+      sep.style.cssText = 'width:12px;border-left:2px dashed #94a3b8;margin:0 4px;';
+      container.appendChild(sep);
+    }
+    const toothBox = createToothElement(t, isUpper, isDeciduous);
+    container.appendChild(toothBox);
+  });
+}
+
+function createToothElement(toothNum, isUpper, isDeciduous) {
+  const box = document.createElement('div');
+  box.className = 'odont-tooth-wrapper';
+  box.id = `tooth-wrapper-${toothNum}`;
+  box.style.cssText = `
+    display:flex;flex-direction:${isUpper ? 'column' : 'column-reverse'};
+    align-items:center;width:${isDeciduous ? '30px' : '36px'};
+    border:1.5px solid #cbd5e1;border-radius:6px;background:#fff;
+    padding:3px;cursor:pointer;user-select:none;transition:all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow:0 1px 3px rgba(0,0,0,0.04);
+  `;
+  box.title = `Gigi ${toothNum} (Klik untuk pilih/update kondisi)`;
+
+  // Label No Gigi
+  const label = document.createElement('div');
+  label.className = 'tooth-num-lbl';
+  label.innerText = toothNum;
+  label.style.cssText = `
+    font-size:${isDeciduous ? '9.5px' : '10.5px'};font-weight:800;
+    color:${isDeciduous ? '#0284c7' : '#1e293b'};background:${isDeciduous ? '#e0f2fe' : '#f1f5f9'};
+    width:100%;text-align:center;border-radius:4px;margin:${isUpper ? '0 0 3px 0' : '3px 0 0 0'};padding:1.5px 0;
+  `;
+
+  // SVG Surface Representation
+  const svgSize = isDeciduous ? 24 : 30;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', svgSize);
+  svg.setAttribute('height', svgSize);
+  svg.setAttribute('viewBox', '0 0 30 30');
+  svg.style.display = 'block';
+
+  // Surface paths (Top=B/L, Bottom=L/P, Left=M/D, Right=D/M, Center=O)
+  const surfaces = [
+    { pos: 'B', points: '0,0 30,0 22,8 8,8' },
+    { pos: 'L', points: '0,30 30,30 22,22 8,22' },
+    { pos: 'M', points: '0,0 0,30 8,22 8,8' },
+    { pos: 'D', points: '30,0 30,30 22,22 22,8' },
+    { pos: 'O', points: '8,8 22,8 22,22 8,22' }
+  ];
+
+  surfaces.forEach(s => {
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    poly.setAttribute('points', s.points);
+    poly.setAttribute('id', `surface-${toothNum}-${s.pos}`);
+    poly.setAttribute('stroke', '#64748b');
+    poly.setAttribute('stroke-width', '1');
+    poly.setAttribute('fill', '#ffffff');
+    poly.style.cursor = 'pointer';
+    poly.onclick = (e) => {
+      e.stopPropagation();
+      const mode = document.getElementById('odontSurfaceMode').value;
+      const targetPos = mode === 'ALL' ? 'ALL' : s.pos;
+      applyConditionToTooth(toothNum, targetPos, selectedOdontCondition);
+    };
+    svg.appendChild(poly);
+  });
+
+  // Whole tooth click
+  box.onclick = () => {
+    const mode = document.getElementById('odontSurfaceMode').value;
+    applyConditionToTooth(toothNum, mode, selectedOdontCondition);
+  };
+
+  // Condition summary badge under/above
+  const condBadge = document.createElement('div');
+  condBadge.id = `cond-tag-${toothNum}`;
+  condBadge.innerText = 'Sou';
+  condBadge.style.cssText = `
+    font-size:8.5px;font-weight:700;color:#64748b;text-align:center;
+    width:100%;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  `;
+
+  box.appendChild(label);
+  box.appendChild(svg);
+  box.appendChild(condBadge);
+
+  return box;
+}
+
+function applyConditionToTooth(toothNum, surface, condition) {
+  const key = `${toothNum}_${surface}`;
+  odontTeethState[key] = {
+    no_gigi: String(toothNum),
+    posisi: surface,
+    kondisi: condition,
+    keterangan: ''
+  };
+
+  if (surface === 'ALL') {
+    // Apply to all 5 surfaces of this tooth
+    ['B', 'L', 'M', 'D', 'O'].forEach(pos => {
+      const pEl = document.getElementById(`surface-${toothNum}-${pos}`);
+      if (pEl) pEl.setAttribute('fill', ODONT_COLORS[condition] || '#ffffff');
+      odontTeethState[`${toothNum}_${pos}`] = {
+        no_gigi: String(toothNum),
+        posisi: pos,
+        kondisi: condition,
+        keterangan: ''
+      };
+    });
+  } else {
+    const pEl = document.getElementById(`surface-${toothNum}-${surface}`);
+    if (pEl) pEl.setAttribute('fill', ODONT_COLORS[condition] || '#ffffff');
+  }
+
+  // Update tag
+  const tag = document.getElementById(`cond-tag-${toothNum}`);
+  if (tag) {
+    tag.innerText = condition;
+    tag.style.color = condition === 'Sou' ? '#64748b' : (ODONT_COLORS[condition] || '#dc2626');
+  }
+
+  calculateDmft();
+}
+
+function calculateDmft() {
+  let d = 0, m = 0, f = 0;
+  const processedTeeth = new Set();
+
+  Object.values(odontTeethState).forEach(t => {
+    if (processedTeeth.has(t.no_gigi)) return;
+    if (t.kondisi === 'Car' || t.kondisi === 'Rad' || t.kondisi === 'Abx') {
+      d++;
+      processedTeeth.add(t.no_gigi);
+    } else if (t.kondisi === 'Mis') {
+      m++;
+      processedTeeth.add(t.no_gigi);
+    } else if (t.kondisi === 'Amf' || t.kondisi === 'Gif' || t.kondisi === 'Cro' || t.kondisi === 'Fis') {
+      f++;
+      processedTeeth.add(t.no_gigi);
+    }
+  });
+
+  if (document.getElementById('valD')) document.getElementById('valD').innerText = d;
+  if (document.getElementById('valM')) document.getElementById('valM').innerText = m;
+  if (document.getElementById('valF')) document.getElementById('valF').innerText = f;
+  const total = d + m + f;
+  if (document.getElementById('badgeDmftTotal')) document.getElementById('badgeDmftTotal').innerText = `Total: ${total}`;
+  return { d, m, f, total };
+}
+
+function calculateOhisScore() {
+  const di = parseFloat(document.getElementById('inputOhisDebris')?.value) || 0;
+  const ci = parseFloat(document.getElementById('inputOhisCalculus')?.value) || 0;
+  const total = di + ci;
+  let kriteria = 'Baik';
+  let badgeColor = '#10b981';
+
+  if (total > 3.0) {
+    kriteria = 'Buruk';
+    badgeColor = '#ef4444';
+  } else if (total > 1.2) {
+    kriteria = 'Sedang';
+    badgeColor = '#f59e0b';
+  }
+
+  const badge = document.getElementById('badgeOhisKriteria');
+  if (badge) {
+    badge.innerText = `${total.toFixed(1)} (${kriteria})`;
+    badge.style.background = badgeColor;
+  }
+  return { di, ci, total: total.toFixed(1), kriteria };
+}
+
+function resetAllTeethToNormal() {
+  if (!confirm('Yakin ingin mereset semua kondisi gigi ke Sehat / Normal?')) return;
+  odontTeethState = {};
+  document.querySelectorAll('[id^="surface-"]').forEach(p => p.setAttribute('fill', '#ffffff'));
+  document.querySelectorAll('[id^="cond-tag-"]').forEach(t => {
+    t.innerText = 'Sou';
+    t.style.color = '#64748b';
+  });
+  calculateDmft();
+  showToast('Kondisi gigi telah direset ke normal', 'info');
+}
+
+function loadOdontogramData() {
+  const rawat = '<?= $rawat_esc ?>';
+  const rm = '<?= $conn->real_escape_string($pasien['no_rkm_medis'] ?? '') ?>';
+
+  fetch(`<?= BASE_URL ?>modules/rekam_medis/ajax.php?action=get_odontogram&no_rawat=${encodeURIComponent(rawat)}&no_rkm_medis=${encodeURIComponent(rm)}`, {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (!res.success) return;
+    if (res.header) {
+      const h = res.header;
+      if (document.getElementById('odontOklusi')) document.getElementById('odontOklusi').value = h.oklusi || 'Normal';
+      if (document.getElementById('odontTorusPalatinus')) document.getElementById('odontTorusPalatinus').value = h.torus_palatinus || 'Tidak Ada';
+      if (document.getElementById('odontTorusMandibularis')) document.getElementById('odontTorusMandibularis').value = h.torus_mandibularis || 'Tidak Ada';
+      if (document.getElementById('odontPalatum')) document.getElementById('odontPalatum').value = h.palatum || 'Sedang';
+      if (document.getElementById('odontDiastema')) document.getElementById('odontDiastema').value = h.diastema || '';
+      if (document.getElementById('odontGigiAnomali')) document.getElementById('odontGigiAnomali').value = h.gigi_anomali || '';
+      if (document.getElementById('odontLainLain')) document.getElementById('odontLainLain').value = h.lain_lain || '';
+      if (document.getElementById('inputOhisDebris')) document.getElementById('inputOhisDebris').value = h.ohis_debris || '0.0';
+      if (document.getElementById('inputOhisCalculus')) document.getElementById('inputOhisCalculus').value = h.ohis_calculus || '0.0';
+      calculateOhisScore();
+    }
+    if (res.teeth && Object.keys(res.teeth).length > 0) {
+      Object.values(res.teeth).forEach(t => {
+        applyConditionToTooth(t.no_gigi, t.posisi, t.kondisi);
+      });
+    }
+  })
+  .catch(err => console.error('Error loading odontogram:', err));
+}
+
+function saveOdontogramData() {
+  const rawat = '<?= $rawat_esc ?>';
+  const rm = '<?= $conn->real_escape_string($pasien['no_rkm_medis'] ?? '') ?>';
+  const dmft = calculateDmft();
+  const ohis = calculateOhisScore();
+
+  const teethArray = Object.values(odontTeethState).filter(t => t.kondisi !== 'Sou');
+
+  const formData = new FormData();
+  formData.append('action', 'simpan_odontogram');
+  formData.append('no_rawat', rawat);
+  formData.append('no_rkm_medis', rm);
+  formData.append('oklusi', document.getElementById('odontOklusi')?.value || 'Normal');
+  formData.append('torus_palatinus', document.getElementById('odontTorusPalatinus')?.value || 'Tidak Ada');
+  formData.append('torus_mandibularis', document.getElementById('odontTorusMandibularis')?.value || 'Tidak Ada');
+  formData.append('palatum', document.getElementById('odontPalatum')?.value || 'Sedang');
+  formData.append('diastema', document.getElementById('odontDiastema')?.value || 'Tidak Ada');
+  formData.append('gigi_anomali', document.getElementById('odontGigiAnomali')?.value || 'Tidak Ada');
+  formData.append('lain_lain', document.getElementById('odontLainLain')?.value || '');
+  formData.append('ohis_debris', String(ohis.di));
+  formData.append('ohis_calculus', String(ohis.ci));
+  formData.append('ohis_nilai', String(ohis.total));
+  formData.append('ohis_kriteria', String(ohis.kriteria));
+  formData.append('d_val', String(dmft.d));
+  formData.append('m_val', String(dmft.m));
+  formData.append('f_val', String(dmft.f));
+  formData.append('dmft_val', String(dmft.total));
+  formData.append('teeth_data', JSON.stringify(teethArray));
+
+  fetch('<?= BASE_URL ?>modules/rekam_medis/ajax.php', {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: formData
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.success) {
+      showToast(res.message || 'Data odontogram berhasil disimpan', 'success');
+    } else {
+      showToast(res.message || 'Gagal menyimpan odontogram', 'danger');
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Gagal menghubungi server', 'danger');
+  });
+}
+
+// ═════════════════════════════════════════════════════════════
+// ─── MODUL KIA (ANC, KMS, IMUNISASI, KB) JAVASCRIPT LOGIC ────
+// ═════════════════════════════════════════════════════════════
+
+function switchKiaSubTab(subTabName) {
+  document.querySelectorAll('.kia-subtab-pane').forEach(el => {
+    el.style.display = 'none';
+    el.classList.remove('clinical-tab-pane-animate');
+  });
+  document.querySelectorAll('.kia-subtab-btn').forEach(el => {
+    el.classList.remove('active');
+    el.classList.add('btn-secondary');
+  });
+
+  const activePane = document.getElementById('kia-sub-pane-' + subTabName);
+  const activeBtn  = document.getElementById('kia-sub-btn-' + subTabName);
+  if (activePane) {
+    activePane.style.display = 'block';
+    void activePane.offsetWidth;
+    activePane.classList.add('clinical-tab-pane-animate');
+  }
+  if (activeBtn) {
+    activeBtn.classList.remove('btn-secondary');
+    activeBtn.classList.add('active');
+    createTabClickRipple(activeBtn);
+  }
+}
+
+// Kalkulator HPL Naegele & Usia Kehamilan
+function calculateNaegeleHPL() {
+  const hphtInput = document.getElementById('ancHPHT');
+  if (!hphtInput || !hphtInput.value) return;
+
+  const hpht = new Date(hphtInput.value);
+  if (isNaN(hpht.getTime())) return;
+
+  // HPL = HPHT + 7 hari - 3 bulan + 1 tahun (Rumus Naegele)
+  const hpl = new Date(hpht);
+  hpl.setDate(hpl.getDate() + 7);
+  hpl.setMonth(hpl.getMonth() - 3);
+  hpl.setFullYear(hpl.getFullYear() + 1);
+
+  const yyyy = hpl.getFullYear();
+  const mm = String(hpl.getMonth() + 1).padStart(2, '0');
+  const dd = String(hpl.getDate()).padStart(2, '0');
+  if (document.getElementById('ancHPL')) document.getElementById('ancHPL').value = `${yyyy}-${mm}-${dd}`;
+
+  // Usia Kehamilan = (Hari Ini - HPHT) dlm minggu & hari
+  const today = new Date();
+  const diffTime = today - hpht;
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  if (diffDays > 0) {
+    const weeks = Math.floor(diffDays / 7);
+    const remDays = diffDays % 7;
+    if (document.getElementById('ancUsiaKehamilan')) {
+      document.getElementById('ancUsiaKehamilan').value = `${weeks} Minggu ${remDays} Hari (${diffDays} hari)`;
+    }
+  }
+}
+
+function evaluateKsprRisk() {
+  const skor = parseInt(document.getElementById('ancSkorKspr')?.value) || 2;
+  const select = document.getElementById('ancResikoKehamilan');
+  if (!select) return;
+
+  if (skor >= 12) {
+    select.value = 'KRST (Sangat Tinggi)';
+    select.style.color = '#991b1b';
+  } else if (skor >= 6) {
+    select.value = 'KRT (Tinggi)';
+    select.style.color = '#d97706';
+  } else {
+    select.value = 'KRR (Rendah)';
+    select.style.color = '#166534';
+  }
+}
+
+function evaluateChildNutrition() {
+  const bb = parseFloat(document.getElementById('kmsBB')?.value) || 0;
+  const tb = parseFloat(document.getElementById('kmsTB')?.value) || 0;
+  const umur = parseInt(document.getElementById('kmsUmurBln')?.value) || 0;
+  const sel = document.getElementById('kmsStatusGiziBBU');
+  if (!sel || bb <= 0) return;
+
+  // Evaluasi sederhana status gizi
+  if (umur > 0) {
+    const approxNormalBB = umur <= 12 ? (umur / 2) + 4 : (umur * 2) + 8;
+    const ratio = bb / approxNormalBB;
+    if (ratio < 0.7) {
+      sel.value = 'Gizi Buruk';
+    } else if (ratio < 0.85) {
+      sel.value = 'Gizi Kurang';
+    } else if (ratio <= 1.15) {
+      sel.value = 'Gizi Baik (Normal)';
+    } else if (ratio <= 1.3) {
+      sel.value = 'Gizi Lebih';
+    } else {
+      sel.value = 'Obesitas';
+    }
+  }
+}
+
+function loadKiaAncData() {
+  const rawat = '<?= $rawat_esc ?>';
+  const rm = '<?= $conn->real_escape_string($pasien['no_rkm_medis'] ?? '') ?>';
+
+  fetch(`<?= BASE_URL ?>modules/rekam_medis/ajax.php?action=get_kia_anc&no_rawat=${encodeURIComponent(rawat)}&no_rkm_medis=${encodeURIComponent(rm)}`, {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (!res.success || !res.data) return;
+    const d = res.data;
+    if (document.getElementById('ancG')) document.getElementById('ancG').value = d.g_hamil || 1;
+    if (document.getElementById('ancP')) document.getElementById('ancP').value = d.p_partus || 0;
+    if (document.getElementById('ancA')) document.getElementById('ancA').value = d.a_abortus || 0;
+    if (document.getElementById('ancH')) document.getElementById('ancH').value = d.h_hidup || 0;
+    if (document.getElementById('ancHPHT')) document.getElementById('ancHPHT').value = d.hpht || '';
+    if (document.getElementById('ancHPL')) document.getElementById('ancHPL').value = d.hpl || '';
+    if (document.getElementById('ancUsiaKehamilan')) document.getElementById('ancUsiaKehamilan').value = d.usia_kehamilan || '';
+    if (document.getElementById('ancTFU')) document.getElementById('ancTFU').value = d.tfu || '';
+    if (document.getElementById('ancDJJ')) document.getElementById('ancDJJ').value = d.djj || '';
+    if (document.getElementById('ancLetakJanin')) document.getElementById('ancLetakJanin').value = d.letak_janin || 'Kepala';
+    if (document.getElementById('ancLeopold1')) document.getElementById('ancLeopold1').value = d.leopold_1 || '';
+    if (document.getElementById('ancLeopold2')) document.getElementById('ancLeopold2').value = d.leopold_2 || '';
+    if (document.getElementById('ancLeopold3')) document.getElementById('ancLeopold3').value = d.leopold_3 || '';
+    if (document.getElementById('ancLeopold4')) document.getElementById('ancLeopold4').value = d.leopold_4 || '';
+    if (document.getElementById('ancEdema')) document.getElementById('ancEdema').value = d.edema || 'Tidak';
+    if (document.getElementById('ancReflPatella')) document.getElementById('ancReflPatella').value = d.refl_patella || '+';
+    if (document.getElementById('ancSkorKspr')) document.getElementById('ancSkorKspr').value = d.skor_kspr || 2;
+    if (document.getElementById('ancResikoKehamilan')) document.getElementById('ancResikoKehamilan').value = d.resiko_kehamilan || 'KRR (Rendah)';
+    if (document.getElementById('ancTindakanKia')) document.getElementById('ancTindakanKia').value = d.tindakan_kia || '';
+    if (document.getElementById('ancSaranNasehat')) document.getElementById('ancSaranNasehat').value = d.saran_nasehat || '';
+  })
+  .catch(err => console.error('Error loading ANC:', err));
+}
+
+function saveKiaAncData() {
+  const rawat = '<?= $rawat_esc ?>';
+  const rm = '<?= $conn->real_escape_string($pasien['no_rkm_medis'] ?? '') ?>';
+
+  const formData = new FormData();
+  formData.append('action', 'simpan_kia_anc');
+  formData.append('no_rawat', rawat);
+  formData.append('no_rkm_medis', rm);
+  formData.append('g_hamil', document.getElementById('ancG')?.value || 1);
+  formData.append('p_partus', document.getElementById('ancP')?.value || 0);
+  formData.append('a_abortus', document.getElementById('ancA')?.value || 0);
+  formData.append('h_hidup', document.getElementById('ancH')?.value || 0);
+  formData.append('hpht', document.getElementById('ancHPHT')?.value || '');
+  formData.append('hpl', document.getElementById('ancHPL')?.value || '');
+  formData.append('usia_kehamilan', document.getElementById('ancUsiaKehamilan')?.value || '');
+  formData.append('tfu', document.getElementById('ancTFU')?.value || '');
+  formData.append('djj', document.getElementById('ancDJJ')?.value || '');
+  formData.append('letak_janin', document.getElementById('ancLetakJanin')?.value || 'Kepala');
+  formData.append('leopold_1', document.getElementById('ancLeopold1')?.value || '');
+  formData.append('leopold_2', document.getElementById('ancLeopold2')?.value || '');
+  formData.append('leopold_3', document.getElementById('ancLeopold3')?.value || '');
+  formData.append('leopold_4', document.getElementById('ancLeopold4')?.value || '');
+  formData.append('edema', document.getElementById('ancEdema')?.value || 'Tidak');
+  formData.append('refl_patella', document.getElementById('ancReflPatella')?.value || '+');
+  formData.append('skor_kspr', document.getElementById('ancSkorKspr')?.value || 2);
+  formData.append('resiko_kehamilan', document.getElementById('ancResikoKehamilan')?.value || 'KRR (Rendah)');
+  formData.append('tindakan_kia', document.getElementById('ancTindakanKia')?.value || '');
+  formData.append('saran_nasehat', document.getElementById('ancSaranNasehat')?.value || '');
+
+  fetch('<?= BASE_URL ?>modules/rekam_medis/ajax.php', {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: formData
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.success) {
+      showToast(res.message || 'Pemeriksaan ANC berhasil disimpan', 'success');
+    } else {
+      showToast(res.message || 'Gagal menyimpan data ANC', 'danger');
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Gagal menghubungi server', 'danger');
+  });
+}
+
+function loadKiaKmsData() {
+  const rawat = '<?= $rawat_esc ?>';
+  const rm = '<?= $conn->real_escape_string($pasien['no_rkm_medis'] ?? '') ?>';
+
+  fetch(`<?= BASE_URL ?>modules/rekam_medis/ajax.php?action=get_kia_kms&no_rawat=${encodeURIComponent(rawat)}&no_rkm_medis=${encodeURIComponent(rm)}`, {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (!res.success || !res.data) return;
+    const d = res.data;
+    if (document.getElementById('kmsUmurBln')) document.getElementById('kmsUmurBln').value = d.umur_bln || 0;
+    if (document.getElementById('kmsBB')) document.getElementById('kmsBB').value = d.bb || '';
+    if (document.getElementById('kmsTB')) document.getElementById('kmsTB').value = d.tb || '';
+    if (document.getElementById('kmsLK')) document.getElementById('kmsLK').value = d.lk || '';
+    if (document.getElementById('kmsLiLA')) document.getElementById('kmsLiLA').value = d.lila || '';
+    if (document.getElementById('kmsStatusGiziBBU')) document.getElementById('kmsStatusGiziBBU').value = d.status_gizi_bb_u || 'Gizi Baik (Normal)';
+    if (document.getElementById('kmsAsiEksklusif')) document.getElementById('kmsAsiEksklusif').value = d.asi_eksklusif || 'Ya';
+    if (document.getElementById('kmsVitA')) document.getElementById('kmsVitA').value = d.vit_a || 'Tidak';
+    if (document.getElementById('kmsObatCacing')) document.getElementById('kmsObatCacing').value = d.obat_cacing || 'Tidak';
+    if (document.getElementById('kmsPerkembanganMotorik')) document.getElementById('kmsPerkembanganMotorik').value = d.perkembangan_motorik || '';
+  })
+  .catch(err => console.error('Error loading KMS:', err));
+}
+
+function saveKiaKmsData() {
+  const rawat = '<?= $rawat_esc ?>';
+  const rm = '<?= $conn->real_escape_string($pasien['no_rkm_medis'] ?? '') ?>';
+
+  const formData = new FormData();
+  formData.append('action', 'simpan_kia_kms');
+  formData.append('no_rawat', rawat);
+  formData.append('no_rkm_medis', rm);
+  formData.append('umur_bln', document.getElementById('kmsUmurBln')?.value || 0);
+  formData.append('bb', document.getElementById('kmsBB')?.value || '');
+  formData.append('tb', document.getElementById('kmsTB')?.value || '');
+  formData.append('lk', document.getElementById('kmsLK')?.value || '');
+  formData.append('lila', document.getElementById('kmsLiLA')?.value || '');
+  formData.append('status_gizi_bb_u', document.getElementById('kmsStatusGiziBBU')?.value || 'Gizi Baik (Normal)');
+  formData.append('asi_eksklusif', document.getElementById('kmsAsiEksklusif')?.value || 'Ya');
+  formData.append('vit_a', document.getElementById('kmsVitA')?.value || 'Tidak');
+  formData.append('obat_cacing', document.getElementById('kmsObatCacing')?.value || 'Tidak');
+  formData.append('perkembangan_motorik', document.getElementById('kmsPerkembanganMotorik')?.value || '');
+
+  fetch('<?= BASE_URL ?>modules/rekam_medis/ajax.php', {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: formData
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.success) {
+      showToast(res.message || 'Data KMS berhasil disimpan', 'success');
+    } else {
+      showToast(res.message || 'Gagal menyimpan data KMS', 'danger');
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Gagal menghubungi server', 'danger');
+  });
+}
+
+function loadKiaImunisasi() {
+  const rm = '<?= $conn->real_escape_string($pasien['no_rkm_medis'] ?? '') ?>';
+  const tbody = document.getElementById('tableBodyImunisasi');
+  if (!tbody) return;
+
+  fetch(`<?= BASE_URL ?>modules/rekam_medis/ajax.php?action=get_kia_imunisasi&no_rkm_medis=${encodeURIComponent(rm)}`, {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (!res.success || !res.data || res.data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:14px;">Belum ada riwayat imunisasi untuk pasien ini.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = res.data.map((item, idx) => `
+      <tr>
+        <td style="text-align:center;">${idx + 1}</td>
+        <td>${item.tgl_imunisasi}</td>
+        <td><strong style="color:#0284c7;">${item.jenis_imunisasi}</strong></td>
+        <td>${item.no_batch || '-'}</td>
+        <td>${item.nama_petugas || '-'}</td>
+        <td style="text-align:center;">
+          <button type="button" onclick="deleteImunisasiItem(${item.id})" class="btn btn-xs btn-outline-danger" style="padding:1px 6px;font-size:10px;">
+            <i class="fas fa-trash"></i>
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  })
+  .catch(err => console.error('Error loading imunisasi:', err));
+}
+
+function addImunisasiItem() {
+  const rawat = '<?= $rawat_esc ?>';
+  const rm = '<?= $conn->real_escape_string($pasien['no_rkm_medis'] ?? '') ?>';
+  const tgl = document.getElementById('imunTgl')?.value;
+  const jenis = document.getElementById('imunJenis')?.value;
+  const batch = document.getElementById('imunBatch')?.value || '';
+  const ket = document.getElementById('imunKet')?.value || '';
+
+  if (!jenis) {
+    showToast('Pilih jenis imunisasi terlebih dahulu', 'warning');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('action', 'simpan_kia_imunisasi');
+  formData.append('no_rawat', rawat);
+  formData.append('no_rkm_medis', rm);
+  formData.append('tgl_imunisasi', tgl);
+  formData.append('jenis_imunisasi', jenis);
+  formData.append('no_batch', batch);
+  formData.append('keterangan', ket);
+
+  fetch('<?= BASE_URL ?>modules/rekam_medis/ajax.php', {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: formData
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.success) {
+      showToast(res.message || 'Imunisasi berhasil ditambahkan', 'success');
+      if (document.getElementById('imunJenis')) document.getElementById('imunJenis').value = '';
+      if (document.getElementById('imunBatch')) document.getElementById('imunBatch').value = '';
+      if (document.getElementById('imunKet')) document.getElementById('imunKet').value = '';
+      loadKiaImunisasi();
+    } else {
+      showToast(res.message || 'Gagal menambahkan imunisasi', 'danger');
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Gagal menghubungi server', 'danger');
+  });
+}
+
+function deleteImunisasiItem(id) {
+  if (!confirm('Hapus riwayat imunisasi ini?')) return;
+  const formData = new FormData();
+  formData.append('action', 'hapus_kia_imunisasi');
+  formData.append('id', id);
+
+  fetch('<?= BASE_URL ?>modules/rekam_medis/ajax.php', {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: formData
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.success) {
+      showToast('Data imunisasi dihapus', 'info');
+      loadKiaImunisasi();
+    }
+  })
+  .catch(err => console.error(err));
+}
+
+function loadKiaKb() {
+  const rm = '<?= $conn->real_escape_string($pasien['no_rkm_medis'] ?? '') ?>';
+  const tbody = document.getElementById('tableBodyKb');
+  if (!tbody) return;
+
+  fetch(`<?= BASE_URL ?>modules/rekam_medis/ajax.php?action=get_kia_kb&no_rkm_medis=${encodeURIComponent(rm)}`, {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (!res.success || !res.data || res.data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:14px;">Belum ada riwayat pelayanan KB untuk pasien ini.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = res.data.map((item, idx) => `
+      <tr>
+        <td style="text-align:center;">${idx + 1}</td>
+        <td>${item.tgl_pelayanan}</td>
+        <td><strong style="color:#7c3aed;">${item.jenis_kontrasepsi}</strong></td>
+        <td>${item.tgl_kembali || '-'}</td>
+        <td>${item.nama_petugas || '-'}</td>
+      </tr>
+    `).join('');
+  })
+  .catch(err => console.error('Error loading KB:', err));
+}
+
+function saveKiaKbData() {
+  const rawat = '<?= $rawat_esc ?>';
+  const rm = '<?= $conn->real_escape_string($pasien['no_rkm_medis'] ?? '') ?>';
+  const tgl = document.getElementById('kbTgl')?.value;
+  const jenis = document.getElementById('kbJenis')?.value;
+  const tglKembali = document.getElementById('kbTglKembali')?.value;
+  const keluhan = document.getElementById('kbKeluhan')?.value || '';
+  const efek = document.getElementById('kbEfekSamping')?.value || '';
+
+  const formData = new FormData();
+  formData.append('action', 'simpan_kia_kb');
+  formData.append('no_rawat', rawat);
+  formData.append('no_rkm_medis', rm);
+  formData.append('tgl_pelayanan', tgl);
+  formData.append('jenis_kontrasepsi', jenis);
+  formData.append('tgl_kembali', tglKembali);
+  formData.append('keluhan', keluhan);
+  formData.append('efek_samping', efek);
+
+  fetch('<?= BASE_URL ?>modules/rekam_medis/ajax.php', {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: formData
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.success) {
+      showToast(res.message || 'Pelayanan KB berhasil disimpan', 'success');
+      loadKiaKb();
+    } else {
+      showToast(res.message || 'Gagal menyimpan data KB', 'danger');
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Gagal menghubungi server', 'danger');
+  });
+}
 </script>
 
 <!-- Modal Detail Riwayat Medis Lengkap -->
@@ -3542,6 +5019,326 @@ function simpanEditItemResep() {
   padding: 8px 10px;
   border-bottom: 1px solid #f1f5f9;
   color: #334155;
+}
+
+/* ═════════════════════════════════════════════════════════════ */
+/* ─── ANIMASI & INTERAKSI TAB MENU KLINIS (MODERN & DYNAMIC) ─── */
+/* ═════════════════════════════════════════════════════════════ */
+
+.clinical-tab-nav-bar {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 14px 14px 0 0;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 2px solid #e2e8f0;
+  flex-wrap: wrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.clinical-tab-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 8px 15px;
+  border-radius: 9px;
+  border: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+  overflow: hidden;
+  user-select: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* Shimmer Light Reflection Sweep on Hover */
+.clinical-tab-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 80%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+  transform: skewX(-20deg);
+  transition: all 0.55s ease;
+  z-index: 2;
+  pointer-events: none;
+}
+.clinical-tab-btn:hover::before {
+  left: 140%;
+}
+
+.clinical-tab-btn i {
+  font-size: 13px;
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease, filter 0.2s ease;
+}
+
+.clinical-tab-btn .badge {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease;
+}
+
+/* Hover State: 3D Floating Lift + Ambient Dynamic Glow */
+.clinical-tab-btn:hover {
+  transform: translateY(-3.5px) scale(1.03);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border-color: #94a3b8;
+  color: #0f172a;
+  box-shadow: 0 10px 22px -3px rgba(15, 23, 42, 0.14), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  z-index: 3;
+}
+
+.clinical-tab-btn:hover i {
+  transform: scale(1.3) rotate(-8deg);
+}
+
+.clinical-tab-btn:hover .badge {
+  transform: scale(1.12);
+}
+
+/* Active Click / Spring Press Feedback */
+.clinical-tab-btn:active {
+  transform: translateY(2px) scale(0.93) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18) !important;
+  transition: transform 0.08s ease;
+}
+
+/* Dynamic Click Ripple Effect */
+.tab-ripple-effect {
+  position: absolute;
+  border-radius: 50%;
+  transform: scale(0);
+  animation: tabRippleAnim 0.6s ease-out;
+  background-color: rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+  inset: 0;
+  margin: auto;
+  width: 110px;
+  height: 110px;
+}
+@keyframes tabRippleAnim {
+  0% { transform: scale(0); opacity: 0.8; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+/* Active Tab Indicator Glow Animation */
+@keyframes pulseIndicator {
+  0%, 100% { opacity: 0.95; transform: scaleX(1); }
+  50% { opacity: 0.55; transform: scaleX(0.85); }
+}
+
+/* Active Selected Tab: 3D Elevated Gradient Pill with Gloss Bevel */
+.clinical-tab-btn.active {
+  background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%) !important;
+  color: #ffffff !important;
+  border-color: #0f766e !important;
+  box-shadow: 0 6px 18px rgba(13, 148, 136, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transform: translateY(-1px);
+  z-index: 2;
+}
+
+.clinical-tab-btn.active i {
+  color: #ffffff !important;
+  transform: scale(1.15);
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.3));
+}
+
+.clinical-tab-btn.active .badge {
+  background: rgba(255, 255, 255, 0.3) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+.clinical-tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  right: 20%;
+  height: 3px;
+  background: #ffffff;
+  border-radius: 99px 99px 0 0;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.85);
+  animation: pulseIndicator 1.8s infinite ease-in-out;
+}
+
+/* ─── Individual Vivid Accents per Tab on Hover & Active ─── */
+#tab-btn-soap:hover {
+  border-color: #2dd4bf;
+  color: #0f766e;
+  box-shadow: 0 10px 22px -3px rgba(15, 118, 110, 0.28);
+}
+#tab-btn-soap.active {
+  background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%) !important;
+  border-color: #0f766e !important;
+  box-shadow: 0 6px 18px rgba(13, 148, 136, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+#tab-btn-diagnosa:hover {
+  border-color: #c084fc;
+  color: #7c3aed;
+  box-shadow: 0 10px 22px -3px rgba(124, 58, 237, 0.28);
+}
+#tab-btn-diagnosa.active {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%) !important;
+  border-color: #7c3aed !important;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+#tab-btn-tindakan:hover {
+  border-color: #fb7185;
+  color: #e11d48;
+  box-shadow: 0 10px 22px -3px rgba(225, 29, 72, 0.28);
+}
+#tab-btn-tindakan.active {
+  background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
+  border-color: #e11d48 !important;
+  box-shadow: 0 6px 18px rgba(225, 29, 72, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+#tab-btn-resep:hover {
+  border-color: #34d399;
+  color: #059669;
+  box-shadow: 0 10px 22px -3px rgba(5, 150, 105, 0.28);
+}
+#tab-btn-resep.active {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+  border-color: #059669 !important;
+  box-shadow: 0 6px 18px rgba(5, 150, 105, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+#tab-btn-lab:hover {
+  border-color: #38bdf8;
+  color: #0284c7;
+  box-shadow: 0 10px 22px -3px rgba(2, 132, 199, 0.28);
+}
+#tab-btn-lab.active {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  border-color: #0284c7 !important;
+  box-shadow: 0 6px 18px rgba(2, 132, 199, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+#tab-btn-odontogram:hover {
+  border-color: #38bdf8;
+  color: #0284c7;
+  box-shadow: 0 10px 22px -3px rgba(2, 132, 199, 0.3);
+}
+#tab-btn-odontogram.active {
+  background: linear-gradient(135deg, #0284c7 0%, #075985 100%) !important;
+  border-color: #0284c7 !important;
+  box-shadow: 0 6px 18px rgba(2, 132, 199, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+#tab-btn-kia:hover {
+  border-color: #f472b6;
+  color: #db2777;
+  box-shadow: 0 10px 22px -3px rgba(219, 39, 119, 0.3);
+}
+#tab-btn-kia.active {
+  background: linear-gradient(135deg, #db2777 0%, #be185d 100%) !important;
+  border-color: #db2777 !important;
+  box-shadow: 0 6px 18px rgba(219, 39, 119, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* ─── Smooth Tab Pane Fade & Slide Entrance ─── */
+@keyframes tabPaneEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.995);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.clinical-tab-pane,
+.clinical-tab-pane-animate {
+  animation: tabPaneEntrance 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ─── KIA Sub-Tab Buttons Animated ─── */
+.kia-subtab-btn {
+  position: relative;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  color: #475569;
+  font-weight: 600;
+  transition: all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+.kia-subtab-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 80%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  transform: skewX(-20deg);
+  transition: all 0.5s ease;
+  pointer-events: none;
+}
+.kia-subtab-btn:hover::before {
+  left: 140%;
+}
+.kia-subtab-btn:hover {
+  transform: translateY(-2.5px) scale(1.03);
+  background: #ffffff;
+  border-color: #f472b6;
+  color: #db2777;
+  box-shadow: 0 8px 18px rgba(219, 39, 119, 0.2);
+}
+.kia-subtab-btn:active {
+  transform: translateY(1px) scale(0.94);
+}
+.kia-subtab-btn.active {
+  background: linear-gradient(135deg, #db2777 0%, #be185d 100%) !important;
+  color: #ffffff !important;
+  border-color: #db2777 !important;
+  box-shadow: 0 5px 14px rgba(219, 39, 119, 0.4), inset 0 1px 0 rgba(255,255,255,0.3);
+}
+.kia-subtab-btn.active i {
+  color: #ffffff !important;
+}
+
+/* ─── Odontogram Palette Buttons Animated ─── */
+.odont-palette-btn {
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: pointer;
+}
+.odont-palette-btn:hover {
+  transform: translateY(-3px) scale(1.06);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.14);
+}
+.odont-palette-btn:active {
+  transform: translateY(1px) scale(0.92);
+}
+.odont-palette-btn.active {
+  box-shadow: 0 0 0 3px #0284c7, 0 6px 14px rgba(2, 132, 199, 0.3) !important;
+  transform: translateY(-1px) scale(1.04);
+}
+
+/* ─── Interactive Tooth Hover Lift & Pulse ─── */
+.odont-tooth-wrapper {
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.odont-tooth-wrapper:hover {
+  transform: translateY(-4px) scale(1.1);
+  border-color: #0284c7 !important;
+  box-shadow: 0 8px 18px rgba(2, 132, 199, 0.35);
+  z-index: 10;
+}
+.odont-tooth-wrapper:active {
+  transform: translateY(1px) scale(0.92);
 }
 </style>
 
